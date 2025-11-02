@@ -65,37 +65,7 @@ def get_app_url():
 
 
 def send_welcome_with_url():
-    """إرسال رسالة ترحيب مع الرابط المكتشف"""
-    import time
-    time.sleep(2)  # انتظار قليل لضمان أن الرابط تم اكتشافه من الطلب
-    
-    # الحصول على الرابط من الطلب الحالي
-    try:
-        from flask import has_request_context
-        if has_request_context() and request:
-            scheme = request.scheme if hasattr(request, 'scheme') and request.scheme else 'https'
-            host = request.host if hasattr(request, 'host') else None
-            
-            if host and host != 'localhost' and 'localhost' not in host and '127.0.0.1' not in host:
-                app_url = f"{scheme}://{host}"
-                # حفظ الرابط المكتشف
-                global _app_url_detected
-                _app_url_detected = app_url
-                print(f"✅ Detected URL from first request: {app_url}")
-            else:
-                app_url = get_app_url()
-        else:
-            app_url = get_app_url()
-    except Exception as e:
-        print(f"⚠️ Error detecting URL: {e}")
-        app_url = get_app_url()
-    
-    # إذا كان الرابط لا يزال localhost، لا ترسل رسالة
-    if app_url and ('localhost' in app_url or '127.0.0.1' in app_url):
-        print(f"⚠️ URL is still localhost ({app_url}), skipping welcome message")
-        print("💡 Please visit /url endpoint to get your webhook URL")
-        return
-    
+    """إرسال رسالة ترحيب مع الرابط المكتشف (deprecated - use check_welcome instead)"""
     send_welcome_message()
 
 
@@ -520,16 +490,18 @@ def send_welcome_message():
     global _app_url_detected
     app_url = _app_url_detected if _app_url_detected else get_app_url()
     
-    # إذا لم يكن هناك رابط مكتشف، استخدم get_app_url
-    if not app_url or app_url.startswith('http://localhost'):
-        app_url = get_app_url()
+    # إذا كان الرابط لا يزال localhost، لا ترسل رسالة
+    if not app_url or app_url.startswith('http://localhost') or '127.0.0.1' in app_url:
+        print(f"⚠️ Cannot send welcome message: URL is localhost ({app_url})")
+        print("💡 Please visit /url endpoint from your Railway domain to get your webhook URL")
+        return False
     
     webhook_url = f"{app_url}/webhook"
     personal_webhook_url = f"{app_url}/personal/{TELEGRAM_CHAT_ID}/webhook"
     test_url = f"{app_url}/test"
     welcome_url = f"{app_url}/welcome"
     
-    print(f"📨 Sending welcome with URL: {app_url}")
+    print(f"📨 Sending welcome message with URL: {app_url}")
     
     welcome_message = """
 🎉 *مرحباً! البوت يعمل الآن* 🎉
@@ -650,21 +622,30 @@ def check_welcome():
     global _welcome_sent, _app_url_detected
     
     # تخطي إذا كان الطلب من نفس البوت (لتجنب loop)
-    if request.path in ['/welcome', '/test']:
+    if request.path in ['/welcome', '/test', '/url', '/link', '/webhook-url']:
         return
     
     if not _welcome_sent:
         # محاولة الحصول على الرابط من الطلب الفعلي
         detected_url = detect_app_url_from_request()
+        
         if detected_url and 'localhost' not in detected_url and '127.0.0.1' not in detected_url:
             _app_url_detected = detected_url
             print(f"✅ Detected app URL from request: {detected_url}")
-        
-        _welcome_sent = True
-        
-        # تشغيل في thread منفصل لتجنب تأخير الطلب
-        import threading
-        threading.Thread(target=send_welcome_with_url, daemon=True).start()
+            
+            # إرسال رسالة الترحيب مباشرة مع الرابط المكتشف
+            _welcome_sent = True
+            import threading
+            import time
+            
+            def send_with_detected_url():
+                time.sleep(1)  # انتظار قليل
+                send_welcome_message()
+            
+            threading.Thread(target=send_with_detected_url, daemon=True).start()
+        else:
+            print(f"⚠️ Could not detect URL from request: {detected_url}")
+            _welcome_sent = True
 
 
 if __name__ == '__main__':
