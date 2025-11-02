@@ -138,10 +138,10 @@ def send_welcome_message():
         url_note = ""
         print(f"✅ Railway URL detected: {project_url}")
     else:
-        # إذا لم يتوفر الرابط، لن نرسل الرسالة الآن
-        # سيتم الإرسال عند أول طلب HTTP
-        print("⏳ Railway URL not available yet, will send welcome message on first HTTP request")
-        return False
+        # إذا لم يتوفر الرابط، نرسل الرسالة مع رابط placeholder وتعليمات
+        webhook_url = f"https://YOUR-RAILWAY-URL.railway.app/personal/{TELEGRAM_CHAT_ID}/webhook"
+        url_note = "\n\n⚠️ <b>ملاحظة مهمة:</b>\nيرجى استبدال YOUR-RAILWAY-URL برابط مشروعك من Railway.\nاذهب إلى Settings → Variables وأضف:\n<code>RAILWAY_PUBLIC_DOMAIN = your-app-name.up.railway.app</code>"
+        print("⚠️ Railway URL not available, sending welcome message with placeholder URL")
     
     return _build_and_send_welcome_message(webhook_url, url_note, project_url)
 
@@ -303,17 +303,25 @@ def format_trading_alert(data):
 @app.route('/', methods=['GET'])
 def home():
     """الصفحة الرئيسية - Home page"""
+    project_url = get_project_url()
+    webhook_url = f"{project_url}/personal/{TELEGRAM_CHAT_ID}/webhook" if project_url else "Not detected"
+    
     return jsonify({
         "service": "TradingView to Telegram Bot",
         "status": "running",
+        "telegram_chat_id": TELEGRAM_CHAT_ID,
+        "project_url": project_url or "Not detected",
+        "webhook_url": webhook_url,
         "endpoints": {
             "/personal/<chat_id>/webhook": "POST - Receive TradingView alerts (personal link)",
             "/webhook": "POST - Receive TradingView alerts (legacy)",
             "/test": "GET - Send test message to Telegram",
+            "/send-alert": "GET/POST - Send test alert to Telegram",
+            "/send-welcome": "GET - Manually send welcome message",
+            "/health": "GET - Health check",
             "/": "GET - This page"
         },
-        "telegram_chat_id": TELEGRAM_CHAT_ID,
-        "instructions": "Add /webhook URL to TradingView Alert webhook field"
+        "instructions": "Add webhook URL to TradingView Alert webhook field"
     }), 200
 
 
@@ -512,6 +520,57 @@ def send_welcome_now():
         }), 500
 
 
+@app.route('/send-alert', methods=['POST', 'GET'])
+def send_test_alert():
+    """
+    إرسال تنبيه تجريبي مباشرة إلى Telegram
+    Send test alert directly to Telegram
+    """
+    try:
+        # إذا كان POST، استخدم البيانات المرسلة
+        if request.method == 'POST':
+            try:
+                alert_data = request.get_json() or dict(request.form) or dict(request.args)
+            except:
+                alert_data = {"message": "تنبيه تجريبي من endpoint /send-alert"}
+        else:
+            # إذا كان GET، أنشئ تنبيه تجريبي
+            alert_data = {
+                "ticker": "BTC/USDT",
+                "price": "50000",
+                "comment": "TEST ALERT - البوت يعمل بشكل صحيح ✅",
+                "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+        
+        # تحويل البيانات إلى رسالة
+        message = format_trading_alert(alert_data)
+        
+        # إرسال الرسالة
+        result = send_telegram_message(message)
+        
+        if result and result.get('ok'):
+            return jsonify({
+                "status": "success",
+                "message": "Test alert sent successfully!",
+                "data_sent": alert_data,
+                "formatted_message": message[:200] + "..." if len(message) > 200 else message
+            }), 200
+        else:
+            return jsonify({
+                "status": "error",
+                "message": "Failed to send alert",
+                "error": result
+            }), 500
+            
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""
@@ -575,20 +634,14 @@ def send_welcome_on_startup():
         if not _welcome_sent:
             print("📨 Attempting to send welcome message...")
             
-            # محاولة إرسال رسالة الترحيب مباشرة
-            project_url = get_project_url()
+            # محاولة إرسال رسالة الترحيب مباشرة (حتى لو لم يتوفر الرابط)
+            result = send_welcome_message()
             
-            if project_url:
-                print(f"✅ Railway URL found: {project_url}")
-                result = send_welcome_message_with_url(project_url)
-                if result:
-                    _welcome_sent = True
-                    print("✅ Welcome message sent successfully!")
-                else:
-                    print("❌ Failed to send welcome message")
+            if result:
+                _welcome_sent = True
+                print("✅ Welcome message sent successfully!")
             else:
-                print("⚠️ Railway URL not detected yet")
-                print("   Will send welcome message on first HTTP request")
+                print("❌ Failed to send welcome message")
         else:
             print("✅ Welcome message already sent")
     except Exception as e:
@@ -625,11 +678,13 @@ def before_first_request():
             if project_url:
                 print(f"✅ Sending welcome message with URL: {project_url}")
                 send_welcome_message_with_url(project_url)
-                _welcome_sent = True
             else:
-                print("⚠️ Could not detect public URL from request (localhost detected)")
-                print("   Please add RAILWAY_PUBLIC_DOMAIN in Railway Settings → Variables")
-                # لا نمنع المحاولة مرة أخرى - ربما الطلب التالي يأتي من الخارج
+                print("⚠️ Could not detect public URL from request")
+                print("   Sending welcome message with placeholder URL")
+                # إرسال الرسالة حتى لو لم يتوفر الرابط
+                send_welcome_message()
+            
+            _welcome_sent = True
         except Exception as e:
             print(f"❌ Error in before_first_request: {e}")
             import traceback
