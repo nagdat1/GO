@@ -10,6 +10,8 @@ import requests
 import json
 import os
 from datetime import datetime
+import threading
+import time
 
 # ═══════════════════════════════════════════════════════════════════════════
 # ⚙️ إعدادات البوت - Bot Settings
@@ -55,7 +57,20 @@ def send_welcome_message():
     Send welcome message when app starts
     """
     try:
-        webhook_url = f"{PROJECT_URL}/webhook" if PROJECT_URL else "https://your-app.railway.app/webhook"
+        if PROJECT_URL:
+            webhook_url = f"{PROJECT_URL}/webhook"
+            url_note = ""
+        else:
+            # محاولة الحصول على URL من Railway environment
+            railway_url = os.environ.get('RAILWAY_PUBLIC_DOMAIN') or os.environ.get('RAILWAY_STATIC_URL')
+            if railway_url:
+                if not railway_url.startswith('http'):
+                    railway_url = f"https://{railway_url}"
+                webhook_url = f"{railway_url}/webhook"
+                url_note = ""
+            else:
+                webhook_url = "https://your-app.railway.app/webhook"
+                url_note = "\n\n⚠️ *ملاحظة:* لم يتم تعيين PROJECT_URL في متغيرات البيئة. يرجى إضافته في Railway Settings → Variables"
         
         welcome_msg = f"""🎉 *مرحباً! البوت يعمل الآن*
 
@@ -69,7 +84,7 @@ def send_welcome_message():
 
 🔗 *رابط Webhook للاستخدام في TradingView:*
 
-`{webhook_url}`
+`{webhook_url}`{url_note}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -87,12 +102,15 @@ def send_welcome_message():
         result = send_telegram_message(welcome_msg)
         if result and result.get('ok'):
             print("✅ Welcome message sent successfully!")
+            print(f"📡 Webhook URL sent: {webhook_url}")
             return True
         else:
             print(f"⚠️ Failed to send welcome message: {result}")
             return False
     except Exception as e:
         print(f"❌ Error sending welcome message: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -322,15 +340,42 @@ def initialize_bot():
     print("=" * 60)
 
 
-# إرسال رسالة الترحيب عند تحميل التطبيق (يعمل مع gunicorn أيضاً)
+def send_welcome_on_startup():
+    """
+    إرسال رسالة الترحيب بعد فترة قصيرة من بدء التطبيق
+    Send welcome message after a short delay from app startup
+    """
+    global _welcome_sent
+    try:
+        # انتظر 8 ثوانٍ لضمان أن التطبيق بدأ بشكل كامل وأن gunicorn جاهز
+        print("⏳ Waiting 8 seconds before sending welcome message...")
+        time.sleep(8)
+        if not _welcome_sent:
+            print("📨 Starting welcome message initialization...")
+            initialize_bot()
+        else:
+            print("✅ Welcome message already sent")
+    except Exception as e:
+        print(f"❌ Error in welcome thread: {e}")
+
+
+# بدء thread لإرسال رسالة الترحيب عند تحميل التطبيق
+# يعمل مع gunicorn و Flask development server
+welcome_thread = threading.Thread(target=send_welcome_on_startup, daemon=True)
+welcome_thread.start()
+
+
+# أيضاً، إرسال رسالة الترحيب عند أول طلب HTTP (كنسخة احتياطية)
 @app.before_request
 def before_first_request():
     """
-    إرسال رسالة الترحيب عند أول طلب (يعمل مع gunicorn)
-    Send welcome message on first request (works with gunicorn)
+    إرسال رسالة الترحيب عند أول طلب (نسخة احتياطية)
+    Send welcome message on first request (backup method)
     """
     global _welcome_sent
     if not _welcome_sent:
+        print("📨 First request detected, sending welcome message as backup...")
+        # أرسل مباشرة بدون تأخير عند أول طلب
         initialize_bot()
 
 
