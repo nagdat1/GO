@@ -21,6 +21,40 @@ TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 app = Flask(__name__)
 
 
+def get_app_url():
+    """
+    الحصول على رابط التطبيق الفعلي
+    Get the actual application URL
+    """
+    # محاولة الحصول من متغيرات البيئة (Railway)
+    # Railway يوفر RAILWAY_PUBLIC_DOMAIN أو RAILWAY_STATIC_URL
+    railway_domain = os.environ.get('RAILWAY_PUBLIC_DOMAIN')
+    if railway_domain:
+        return f"https://{railway_domain}"
+    
+    railway_url = os.environ.get('RAILWAY_STATIC_URL')
+    if railway_url:
+        return railway_url
+    
+    # محاولة من متغيرات أخرى محتملة
+    service_domain = os.environ.get('RAILWAY_SERVICE_DOMAIN')
+    if service_domain:
+        return f"https://{service_domain}"
+    
+    # محاولة الحصول من request عند وجوده (للتشغيل على السيرفر)
+    try:
+        from flask import has_request_context, request
+        if has_request_context():
+            # الحصول من الطلب الحالي
+            return f"{request.scheme}://{request.host}"
+    except:
+        pass
+    
+    # إذا لم يكن متاحاً، استخدم localhost للتطوير المحلي
+    port = os.environ.get('PORT', '5000')
+    return f"http://localhost:{port}"
+
+
 def send_telegram_message(message, parse_mode="Markdown"):
     """
     إرسال رسالة إلى تلجرام
@@ -115,18 +149,21 @@ def format_trading_alert(data):
 @app.route('/', methods=['GET'])
 def home():
     """الصفحة الرئيسية - Home page"""
+    app_url = get_app_url()
     return jsonify({
         "service": "TradingView to Telegram Bot",
         "status": "running",
+        "app_url": app_url,
         "endpoints": {
-            "/webhook": "POST - Receive TradingView alerts",
-            "/test": "GET - Send test message to Telegram",
-            "/welcome": "GET - Send welcome message",
-            "/health": "GET - Health check",
-            "/": "GET - This page"
+            "/webhook": f"{app_url}/webhook - POST - Receive TradingView alerts",
+            "/test": f"{app_url}/test - GET - Send test message to Telegram",
+            "/welcome": f"{app_url}/welcome - GET - Send welcome message",
+            "/health": f"{app_url}/health - GET - Health check",
+            "/": f"{app_url}/ - GET - This page"
         },
         "telegram_chat_id": TELEGRAM_CHAT_ID,
-        "instructions": "Add /webhook URL to TradingView Alert webhook field"
+        "webhook_url": f"{app_url}/webhook",
+        "instructions": f"Add {app_url}/webhook to TradingView Alert webhook field"
     }), 200
 
 
@@ -242,6 +279,12 @@ def send_welcome_message():
     إرسال رسالة ترحيب عند بدء البوت
     Send welcome message when bot starts
     """
+    # الحصول على الرابط الفعلي
+    app_url = get_app_url()
+    webhook_url = f"{app_url}/webhook"
+    test_url = f"{app_url}/test"
+    welcome_url = f"{app_url}/welcome"
+    
     welcome_message = """
 🎉 *مرحباً! البوت يعمل الآن* 🎉
 
@@ -253,18 +296,38 @@ def send_welcome_message():
 
 ✅ *البوت جاهز لاستقبال التنبيهات من TradingView!*
 
-📡 *Webhook جاهز:* `/webhook`
-🧪 *للاختبار:* افتح `/test` endpoint
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔗 *روابط البوت:*
+
+📡 *Webhook (للإشارات):*
+`{webhook_url}`
+
+🧪 *اختبار البوت:*
+`{test_url}`
+
+👋 *رسالة ترحيب:*
+`{welcome_url}`
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 💡 *تعليمات:*
-1. أضف رابط Webhook في TradingView Alert
-2. ضع الرابط: `https://your-app.railway.app/webhook`
-3. سيتم إرسال التنبيهات تلقائياً هنا! 🚀
+1. افتح TradingView
+2. اذهب إلى Alerts → Create Alert
+3. فعّل Webhook URL
+4. ضع هذا الرابط:
+   `{webhook_url}`
+5. احفظ الإعدادات! 🚀
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    """.format(time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+📝 *ملاحظة:* هذا هو رابطك الفعلي - استخدمه مباشرة في TradingView!
+    """.format(
+        time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        webhook_url=webhook_url,
+        test_url=test_url,
+        welcome_url=welcome_url
+    )
     
     try:
         result = send_telegram_message(welcome_message)
@@ -299,14 +362,20 @@ def welcome():
 # Function to send welcome message when bot starts
 def on_startup():
     """تشغيل عند بدء البوت"""
+    # الحصول على الرابط الفعلي
+    app_url = get_app_url()
+    webhook_url = f"{app_url}/webhook"
+    test_url = f"{app_url}/test"
+    
     print("=" * 60)
     print("🤖 TradingView to Telegram Bot")
     print("=" * 60)
     print(f"\n📱 Bot Token: {TELEGRAM_BOT_TOKEN[:10]}...")
     print(f"💬 Chat ID: {TELEGRAM_CHAT_ID}")
     print(f"\n🌐 Server starting...")
-    print(f"📡 Webhook URL: https://your-app.railway.app/webhook")
-    print(f"\n✅ To test: https://your-app.railway.app/test")
+    print(f"🔗 App URL: {app_url}")
+    print(f"📡 Webhook URL: {webhook_url}")
+    print(f"✅ To test: {test_url}")
     print("=" * 60)
     
     # إرسال رسالة ترحيب
