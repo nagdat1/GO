@@ -875,19 +875,65 @@ def on_startup():
         _app_url_detected = railway_url
         print(f"✅ Railway URL detected: {railway_url}")
         
-        # إرسال رسالة الترحيب مباشرة
+        # إرسال رسالة ترحيب بسيطة مباشرة (بدون انتظار)
         import threading
-        import time
         
         def send_startup_message():
-            time.sleep(2)  # انتظار قليل لضمان أن السيرفر جاهز
-            send_welcome_message()
+            try:
+                # رسالة ترحيب بسيطة
+                startup_message = f"""
+🎉 البوت بدأ العمل الآن!
+Bot Started Successfully!
+
+⏰ الوقت: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+🌐 الخادم: Railway
+✅ الحالة: جاهز لاستقبال الإشارات
+
+📡 رابط Webhook الخاص بك:
+{railway_url}/personal/{TELEGRAM_CHAT_ID}/webhook
+
+💡 استخدم هذا الرابط في TradingView Alerts
+                """
+                
+                print("📨 Sending startup message to Telegram...")
+                result = send_telegram_message(startup_message, parse_mode=None)
+                
+                if result and result.get('ok'):
+                    print("✅ Startup message sent successfully!")
+                else:
+                    print(f"⚠️ Failed to send startup message: {result}")
+            except Exception as e:
+                print(f"❌ Error sending startup message: {e}")
         
+        # إرسال في thread منفصل بدون تأخير
         threading.Thread(target=send_startup_message, daemon=True).start()
-        print(f"📨 Welcome message will be sent shortly...")
+        print(f"📨 Sending welcome message...")
     else:
         print(f"📡 Waiting for first request to detect URL...")
         print(f"✅ To test: /test endpoint or /url")
+        
+        # إرسال رسالة بسيطة حتى بدون URL
+        import threading
+        
+        def send_simple_startup():
+            try:
+                simple_message = f"""
+🎉 البوت بدأ العمل!
+Bot Started!
+
+⏰ {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+✅ جاهز
+
+💡 افتح /url للحصول على رابط Webhook
+                """
+                print("📨 Sending simple startup message...")
+                result = send_telegram_message(simple_message, parse_mode=None)
+                if result and result.get('ok'):
+                    print("✅ Simple startup message sent!")
+            except Exception as e:
+                print(f"⚠️ Error: {e}")
+        
+        threading.Thread(target=send_simple_startup, daemon=True).start()
     
     print("=" * 60)
 
