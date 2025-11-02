@@ -23,6 +23,27 @@ TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 # الحصول على رابط المشروع من متغيرات البيئة
 # Railway يوفر RAILWAY_PUBLIC_DOMAIN أو RAILWAY_STATIC_URL (في بعض الحالات يجب إضافته يدوياً)
 # يمكن أيضاً استخدام PUBLIC_URL كبديل
+
+# طباعة جميع المتغيرات للتحقق (في حالة debug)
+def check_env_vars():
+    """فحص متغيرات البيئة للتحقق من وجود RAILWAY_PUBLIC_DOMAIN"""
+    railway_public = os.getenv('RAILWAY_PUBLIC_DOMAIN')
+    railway_static = os.getenv('RAILWAY_STATIC_URL')
+    public_url = os.getenv('PUBLIC_URL')
+    
+    print("\n" + "=" * 70)
+    print("🔍 Checking Environment Variables:")
+    print("=" * 70)
+    print(f"   RAILWAY_PUBLIC_DOMAIN = {railway_public or 'NOT SET'}")
+    print(f"   RAILWAY_STATIC_URL = {railway_static or 'NOT SET'}")
+    print(f"   PUBLIC_URL = {public_url or 'NOT SET'}")
+    print("=" * 70 + "\n")
+    
+    return railway_public, railway_static, public_url
+
+# فحص المتغيرات عند التحميل
+check_env_vars()
+
 RAILWAY_URL = (
     os.getenv('RAILWAY_PUBLIC_DOMAIN') or 
     os.getenv('RAILWAY_STATIC_URL') or 
@@ -646,6 +667,35 @@ def verify_webhook():
             "2": "Paste it in TradingView Alert webhook field",
             "3": "Test by sending an alert"
         }
+    }), 200
+
+
+@app.route('/check-env', methods=['GET'])
+def check_env():
+    """
+    التحقق من متغيرات البيئة في الوقت الفعلي
+    Check environment variables in real-time
+    """
+    railway_public = os.getenv('RAILWAY_PUBLIC_DOMAIN')
+    railway_static = os.getenv('RAILWAY_STATIC_URL')
+    public_url = os.getenv('PUBLIC_URL')
+    
+    # قراءة جميع متغيرات Railway المتاحة
+    all_railway_vars = {k: v for k, v in os.environ.items() if 'RAILWAY' in k}
+    
+    return jsonify({
+        "status": "ok",
+        "environment_variables": {
+            "RAILWAY_PUBLIC_DOMAIN": railway_public or "NOT SET",
+            "RAILWAY_STATIC_URL": railway_static or "NOT SET",
+            "PUBLIC_URL": public_url or "NOT SET",
+            "TELEGRAM_CHAT_ID": TELEGRAM_CHAT_ID,
+            "TELEGRAM_BOT_TOKEN": TELEGRAM_BOT_TOKEN[:20] + "..." if TELEGRAM_BOT_TOKEN else "NOT SET"
+        },
+        "all_railway_variables": all_railway_vars,
+        "detected_project_url": get_project_url() or "NOT DETECTED",
+        "project_url_from_module": PROJECT_URL or "NOT SET",
+        "recommendation": "If RAILWAY_PUBLIC_DOMAIN is NOT SET, add it in Railway Dashboard → Settings → Variables and redeploy the service."
     }), 200
 
 
