@@ -70,27 +70,30 @@ def send_welcome_message():
                 url_note = ""
             else:
                 webhook_url = "https://your-app.railway.app/webhook"
-                url_note = "\n\n⚠️ *ملاحظة:* لم يتم تعيين PROJECT_URL في متغيرات البيئة. يرجى إضافته في Railway Settings → Variables"
+                url_note = "\n\n⚠️ <b>ملاحظة:</b> لم يتم تعيين PROJECT_URL في متغيرات البيئة. يرجى إضافته في Railway Settings ➜ Variables"
         
-        welcome_msg = f"""🎉 *مرحباً! البوت يعمل الآن*
+        # بناء الرسالة باستخدام HTML لتجنب مشاكل Markdown
+        time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        welcome_msg = f"""🎉 <b>مرحباً! البوت يعمل الآن</b>
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🤖 *حالة البوت:* ✅ نشط
-📊 *الخدمة:* TradingView → Telegram
-⏰ *وقت البدء:* {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+🤖 <b>حالة البوت:</b> ✅ نشط
+📊 <b>الخدمة:</b> TradingView ➜ Telegram
+⏰ <b>وقت البدء:</b> <code>{time_str}</code>
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🔗 *رابط Webhook للاستخدام في TradingView:*
+🔗 <b>رابط Webhook للاستخدام في TradingView:</b>
 
-`{webhook_url}`{url_note}
+<code>{webhook_url}</code>{url_note}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📝 *تعليمات الاستخدام:*
+📝 <b>تعليمات الاستخدام:</b>
 1. افتح TradingView
-2. اضغط على Alert (🔔)
+2. اضغط على Alert 🔔
 3. ضع الرابط أعلاه في حقل Webhook URL
 4. ابدأ بإرسال التنبيهات!
 
@@ -99,7 +102,7 @@ def send_welcome_message():
 ✅ البوت جاهز لاستقبال التنبيهات من TradingView
 """
         
-        result = send_telegram_message(welcome_msg)
+        result = send_telegram_message(welcome_msg, parse_mode="HTML")
         if result and result.get('ok'):
             print("✅ Welcome message sent successfully!")
             print(f"📡 Webhook URL sent: {webhook_url}")
