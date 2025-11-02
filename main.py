@@ -259,14 +259,14 @@ def personal_webhook(chat_id):
             
             webhook_url = f"{current_url}/personal/{chat_id}/webhook"
             
-    return jsonify({
+            return jsonify({
                 "status": "online",
                 "message": "Personal webhook is ready",
                 "endpoint": f"/personal/{chat_id}/webhook",
                 "chat_id": chat_id,
                 "webhook_url": webhook_url,
                 "current_host": request.host if hasattr(request, 'host') else "unknown"
-    }), 200
+            }), 200
             
     except Exception as e:
         print(f"❌ Error in personal webhook: {e}")
