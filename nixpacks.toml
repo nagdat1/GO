@@ -1,13 +1,9 @@
 [phases.setup]
-nixPkgs = ['python311', 'curl']
+nixPkgs = ['python311', 'python311Packages.pip']
 
 [phases.install]
-cmds = [
-    'curl -sSL https://bootstrap.pypa.io/get-pip.py -o get-pip.py',
-    'python3 get-pip.py',
-    'python3 -m pip install -r requirements.txt',
-    'rm get-pip.py'
-]
+cmds = ['pip install -r requirements.txt']
 
 [start]
-cmd = 'gunicorn main:app'
+cmd = 'gunicorn --bind 0.0.0.0:$PORT main:app'
+
