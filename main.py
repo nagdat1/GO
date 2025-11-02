@@ -75,13 +75,29 @@ def send_telegram_message(message, parse_mode="Markdown"):
         url = f"{TELEGRAM_API_URL}/sendMessage"
         data = {
             "chat_id": TELEGRAM_CHAT_ID,
-            "text": message,
-            "parse_mode": parse_mode
+            "text": message
         }
-        print(f"📤 Sending message to Telegram (chat_id: {TELEGRAM_CHAT_ID})...")
+        
+        # إضافة parse_mode فقط إذا لم يكن None
+        if parse_mode:
+            data["parse_mode"] = parse_mode
+        
+        print(f"📤 Sending message to Telegram...")
+        print(f"   URL: {url}")
+        print(f"   Chat ID: {TELEGRAM_CHAT_ID}")
+        print(f"   Parse mode: {parse_mode}")
+        print(f"   Message length: {len(message)} chars")
+        
         response = requests.post(url, json=data, timeout=10)
         result = response.json()
+        
         print(f"📥 Telegram response: {result}")
+        
+        if result.get('ok'):
+            print(f"✅ Message sent successfully!")
+        else:
+            print(f"❌ Failed to send message: {result.get('description')}")
+        
         return result
     except Exception as e:
         print(f"❌ Error sending message: {e}")
@@ -243,14 +259,14 @@ def personal_webhook(chat_id):
             
             webhook_url = f"{current_url}/personal/{chat_id}/webhook"
             
-            return jsonify({
+    return jsonify({
                 "status": "online",
                 "message": "Personal webhook is ready",
                 "endpoint": f"/personal/{chat_id}/webhook",
                 "chat_id": chat_id,
                 "webhook_url": webhook_url,
                 "current_host": request.host if hasattr(request, 'host') else "unknown"
-            }), 200
+    }), 200
             
     except Exception as e:
         print(f"❌ Error in personal webhook: {e}")
@@ -392,6 +408,96 @@ def health():
         "status": "healthy",
         "service": "TradingView to Telegram Bot"
     }), 200
+
+
+@app.route('/test-bot', methods=['GET'])
+def test_bot():
+    """
+    اختبار صحة Bot Token و Chat ID
+    Test Bot Token and Chat ID validity
+    """
+    results = {}
+    
+    # 1. اختبار صحة Bot Token
+    try:
+        url = f"{TELEGRAM_API_URL}/getMe"
+        response = requests.get(url, timeout=10)
+        bot_info = response.json()
+        results['bot_token_test'] = {
+            'valid': bot_info.get('ok', False),
+            'bot_info': bot_info.get('result', {}) if bot_info.get('ok') else None,
+            'error': bot_info.get('description') if not bot_info.get('ok') else None
+        }
+    except Exception as e:
+        results['bot_token_test'] = {
+            'valid': False,
+            'error': str(e)
+        }
+    
+    # 2. اختبار إرسال رسالة بسيطة (بدون Markdown)
+    try:
+        test_message = f"🧪 رسالة اختبار\nTest Message\n\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        send_result = send_telegram_message(test_message, parse_mode=None)
+        
+        results['send_test'] = {
+            'success': send_result.get('ok', False) if send_result else False,
+            'response': send_result,
+            'chat_id': TELEGRAM_CHAT_ID
+        }
+    except Exception as e:
+        results['send_test'] = {
+            'success': False,
+            'error': str(e)
+        }
+    
+    return jsonify({
+        "test_results": results,
+        "bot_token": f"{TELEGRAM_BOT_TOKEN[:15]}...",
+        "chat_id": TELEGRAM_CHAT_ID,
+        "telegram_api_url": TELEGRAM_API_URL
+    }), 200
+
+
+@app.route('/simple-test', methods=['GET'])
+def simple_test():
+    """
+    اختبار بسيط جداً - إرسال رسالة بدون أي تنسيق
+    Very simple test - send plain text message
+    """
+    try:
+        url = f"{TELEGRAM_API_URL}/sendMessage"
+        simple_message = f"Simple test {datetime.now().strftime('%H:%M:%S')}"
+        
+        # إرسال بدون parse_mode
+        data = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": simple_message
+        }
+        
+        print(f"🔍 Testing simple message...")
+        print(f"URL: {url}")
+        print(f"Data: {data}")
+        
+        response = requests.post(url, json=data, timeout=10)
+        result = response.json()
+        
+        print(f"Response: {result}")
+        
+        return jsonify({
+            "status": "success" if result.get('ok') else "error",
+            "result": result,
+            "message": "Check logs for details"
+        }), 200 if result.get('ok') else 500
+        
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"❌ Error: {error_details}")
+        return jsonify({
+            "status": "error",
+            "error": str(e),
+            "traceback": error_details
+        }), 500
 
 
 @app.route('/url', methods=['GET'])
