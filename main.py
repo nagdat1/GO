@@ -413,6 +413,43 @@ def test():
         }), 500
 
 
+@app.route('/send-welcome', methods=['GET'])
+def send_welcome_now():
+    """
+    إرسال رسالة الترحيب يدوياً للتحقق
+    Manually send welcome message for testing
+    """
+    try:
+        project_url = get_project_url()
+        
+        response_data = {
+            "project_url_detected": project_url,
+            "env_vars": {
+                "RAILWAY_PUBLIC_DOMAIN": os.getenv('RAILWAY_PUBLIC_DOMAIN'),
+                "RAILWAY_STATIC_URL": os.getenv('RAILWAY_STATIC_URL'),
+                "PUBLIC_URL": os.getenv('PUBLIC_URL'),
+            },
+            "request_host": request.host if request else None
+        }
+        
+        if project_url:
+            result = send_welcome_message_with_url(project_url)
+            response_data["status"] = "success" if result else "failed"
+            response_data["message"] = "Welcome message sent!" if result else "Failed to send"
+            return jsonify(response_data), 200
+        else:
+            response_data["status"] = "error"
+            response_data["message"] = "Could not detect Railway URL. Please add RAILWAY_PUBLIC_DOMAIN to environment variables."
+            return jsonify(response_data), 400
+            
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "traceback": str(e.__traceback__)
+        }), 500
+
+
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""
