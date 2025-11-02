@@ -21,21 +21,26 @@ TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '8169000394')
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 # الحصول على رابط المشروع من متغيرات البيئة
-# Railway يوفر RAILWAY_PUBLIC_DOMAIN أو RAILWAY_STATIC_URL تلقائياً
-# استخدام نفس الطريقة المستخدمة في المشروع المرجعي
+# Railway يوفر RAILWAY_PUBLIC_DOMAIN أو RAILWAY_STATIC_URL تلقائياً (نفس طريقة المشروع المرجعي)
 RAILWAY_URL = os.getenv('RAILWAY_PUBLIC_DOMAIN') or os.getenv('RAILWAY_STATIC_URL')
-PROJECT_URL = os.environ.get('PROJECT_URL', '') or RAILWAY_URL or ''
 
 # إضافة https إذا لم يكن موجوداً
-if PROJECT_URL and not PROJECT_URL.startswith('http'):
-    PROJECT_URL = f"https://{PROJECT_URL}"
+if RAILWAY_URL and not RAILWAY_URL.startswith('http'):
+    RAILWAY_URL = f"https://{RAILWAY_URL}"
+
+# استخدام RAILWAY_URL مباشرة
+PROJECT_URL = RAILWAY_URL
+
+# طباعة معلومات Railway للتأكد
+if PROJECT_URL:
+    print(f"🚂 Railway URL detected at module load: {PROJECT_URL}")
+else:
+    print("⏳ Railway URL not available at module load, will detect on first HTTP request")
 
 app = Flask(__name__)
 
 # متغير لتتبع ما إذا تم إرسال رسالة الترحيب
 _welcome_sent = False
-# متغير لحفظ الرابط المكتشف تلقائياً
-_detected_project_url = None
 
 
 def send_telegram_message(message, parse_mode="Markdown"):
@@ -59,43 +64,19 @@ def send_telegram_message(message, parse_mode="Markdown"):
 
 def get_project_url():
     """
-    الحصول على رابط المشروع تلقائياً من Railway
-    Get project URL automatically from Railway (same method as reference project)
+    الحصول على رابط المشروع من Railway (نفس طريقة المشروع المرجعي)
+    Get project URL from Railway (same method as reference project)
     """
-    global _detected_project_url
-    
-    # إذا تم اكتشاف الرابط مسبقاً، استخدمه
-    if _detected_project_url:
-        return _detected_project_url
-    
-    # استخدام نفس الطريقة المستخدمة في المشروع المرجعي
-    # Railway يوفر RAILWAY_PUBLIC_DOMAIN أو RAILWAY_STATIC_URL تلقائياً
+    # طريقة بسيطة ومباشرة مثل المشروع المرجعي
     railway_url = os.getenv('RAILWAY_PUBLIC_DOMAIN') or os.getenv('RAILWAY_STATIC_URL')
     
     if railway_url:
         if not railway_url.startswith('http'):
             railway_url = f"https://{railway_url}"
-        _detected_project_url = railway_url
         return railway_url
     
-    # إذا لم يتم العثور، جرب PROJECT_URL
-    if PROJECT_URL:
-        _detected_project_url = PROJECT_URL
-        return PROJECT_URL
-    
-    # محاولة من request headers كحل أخير
-    try:
-        from flask import has_request_context, request
-        if has_request_context() and request and request.host:
-            host = request.host
-            if 'railway.app' in host or 'railway.dev' in host:
-                detected_url = f"https://{host}"
-                _detected_project_url = detected_url
-                return detected_url
-    except:
-        pass
-    
-    return None
+    # إذا لم يتم العثور، استخدم PROJECT_URL (المحفوظ عند البدء)
+    return PROJECT_URL
 
 
 def send_welcome_message_with_url(project_url=None):
@@ -113,31 +94,23 @@ def send_welcome_message_with_url(project_url=None):
 
 def send_welcome_message():
     """
-    إرسال رسالة ترحيب عند بدء التطبيق
-    Send welcome message when app starts
+    إرسال رسالة ترحيب عند بدء التطبيق (نفس نهج المشروع المرجعي)
+    Send welcome message when app starts (same approach as reference project)
     """
-    # محاولة الحصول على الرابط تلقائياً من Railway
-    detected_url = get_project_url()
+    # الحصول على الرابط من Railway (مثل المشروع المرجعي)
+    project_url = get_project_url()
     
-    if detected_url:
-        webhook_url = f"{detected_url}/personal/{TELEGRAM_CHAT_ID}/webhook"
+    if project_url:
+        webhook_url = f"{project_url}/personal/{TELEGRAM_CHAT_ID}/webhook"
         url_note = ""
-        print(f"✅ Project URL detected automatically: {detected_url}")
+        print(f"✅ Railway URL detected: {project_url}")
     else:
-        # إذا لم يتم العثور على الرابط من Railway، استخدم PROJECT_URL أو انتظر
-        if PROJECT_URL:
-            webhook_url = f"{PROJECT_URL}/personal/{TELEGRAM_CHAT_ID}/webhook"
-            url_note = ""
-            detected_url = PROJECT_URL
-        else:
-            # لم يتم العثور على الرابط - سيتم المحاولة عند أول طلب
-            webhook_url = f"https://detecting.../personal/{TELEGRAM_CHAT_ID}/webhook"
-            url_note = """
-            
-⏳ <b>جاري اكتشاف الرابط تلقائياً...</b>
-سيتم تحديث الرابط عند أول طلب HTTP."""
+        # إذا لم يتوفر الرابط، لن نرسل الرسالة الآن
+        # سيتم الإرسال عند أول طلب HTTP
+        print("⏳ Railway URL not available yet, will send welcome message on first HTTP request")
+        return False
     
-    return _build_and_send_welcome_message(webhook_url, url_note, detected_url)
+    return _build_and_send_welcome_message(webhook_url, url_note, project_url)
 
 
 def _build_and_send_welcome_message(webhook_url, url_note, project_url=None):
@@ -428,27 +401,25 @@ def initialize_bot():
     if _welcome_sent:
         return
     
-    # محاولة الحصول على الرابط تلقائياً
-    detected_url = get_project_url()
-    if detected_url:
-        webhook_url = f"{detected_url}/personal/{TELEGRAM_CHAT_ID}/webhook"
-    elif PROJECT_URL:
-        webhook_url = f"{PROJECT_URL}/personal/{TELEGRAM_CHAT_ID}/webhook"
+    # الحصول على الرابط من Railway
+    project_url = get_project_url()
+    if project_url:
+        webhook_url = f"{project_url}/personal/{TELEGRAM_CHAT_ID}/webhook"
     else:
-        webhook_url = f"https://detecting.../personal/{TELEGRAM_CHAT_ID}/webhook"
+        webhook_url = f"https://YOUR-RAILWAY-URL.railway.app/personal/{TELEGRAM_CHAT_ID}/webhook"
     
     print("=" * 60)
     print("🤖 TradingView to Telegram Bot")
     print("=" * 60)
     print(f"\n📱 Bot Token: {TELEGRAM_BOT_TOKEN[:10]}...")
     print(f"💬 Chat ID: {TELEGRAM_CHAT_ID}")
-    print(f"\n🌐 Project URL: {PROJECT_URL if PROJECT_URL else 'Not set (use PROJECT_URL env var)'}")
+    print(f"\n🌐 Railway URL: {project_url if project_url else 'Not detected yet'}")
     print(f"📡 Webhook URL: {webhook_url}")
-    if PROJECT_URL:
-        print(f"\n✅ To test: {PROJECT_URL}/test")
+    if project_url:
+        print(f"\n✅ Test endpoint: {project_url}/test")
+        print(f"✅ Personal webhook: {webhook_url}")
     else:
-        print(f"\n⚠️  PROJECT_URL not set! Add it in Railway Settings → Variables")
-        print(f"   Example: https://botbybit-production.up.railway.app")
+        print(f"\n⏳ Railway URL will be detected on first HTTP request")
     print("=" * 60)
     
     # إرسال رسالة الترحيب
@@ -487,33 +458,21 @@ welcome_thread.start()
 @app.before_request
 def before_first_request():
     """
-    اكتشاف الرابط تلقائياً وإرسال رسالة الترحيب عند أول طلب
-    Auto-detect URL and send welcome message on first request
+    إرسال رسالة الترحيب عند أول طلب HTTP إذا لم يتم إرسالها بعد
+    Send welcome message on first HTTP request if not sent yet
     """
-    global _welcome_sent, _detected_project_url
+    global _welcome_sent
     
-    # محاولة اكتشاف الرابط من request headers
-    try:
-        from flask import has_request_context
-        if has_request_context() and request and request.host and not _detected_project_url:
-            host = request.host
-            # التحقق من أن الرابط من Railway
-            if 'railway.app' in host or 'railway.dev' in host:
-                detected_url = f"https://{host}"
-                _detected_project_url = detected_url
-                print(f"✅ Auto-detected project URL from request: {detected_url}")
-                
-                # إذا لم يتم إرسال رسالة الترحيب بعد، أرسلها مع الرابط المكتشف
-                if not _welcome_sent:
-                    send_welcome_message_with_url(detected_url)
-                    _welcome_sent = True
-    except Exception as e:
-        print(f"⚠️ Could not detect URL from request: {e}")
-    
-    # إذا لم يتم إرسال الرسالة بعد، أرسلها
+    # إرسال رسالة الترحيب عند أول طلب إذا لم يتم إرسالها
     if not _welcome_sent:
-        print("📨 First request detected, sending welcome message...")
-        initialize_bot()
+        print("📨 First HTTP request detected, sending welcome message...")
+        # الحصول على الرابط من Railway
+        project_url = get_project_url()
+        if project_url:
+            send_welcome_message_with_url(project_url)
+        else:
+            initialize_bot()
+        _welcome_sent = True
 
 
 if __name__ == '__main__':
