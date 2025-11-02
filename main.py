@@ -78,10 +78,15 @@ def send_telegram_message(message, parse_mode="Markdown"):
             "text": message,
             "parse_mode": parse_mode
         }
+        print(f"📤 Sending message to Telegram (chat_id: {TELEGRAM_CHAT_ID})...")
         response = requests.post(url, json=data, timeout=10)
-        return response.json()
+        result = response.json()
+        print(f"📥 Telegram response: {result}")
+        return result
     except Exception as e:
         print(f"❌ Error sending message: {e}")
+        import traceback
+        traceback.print_exc()
         return {"ok": False, "error": str(e)}
 
 
@@ -386,6 +391,33 @@ def test():
         }), 500
 
 
+@app.route('/send-welcome', methods=['GET'])
+def send_welcome_endpoint():
+    """
+    إرسال رسالة ترحيب مباشرة
+    Send welcome message directly
+    """
+    # الحصول على الرابط من الطلب الحالي
+    try:
+        scheme = request.scheme if hasattr(request, 'scheme') and request.scheme else 'https'
+        host = request.host if hasattr(request, 'host') else None
+        
+        if host and host != 'localhost' and 'localhost' not in host and '127.0.0.1' not in host:
+            global _app_url_detected
+            _app_url_detected = f"{scheme}://{host}"
+            print(f"✅ Detected URL in /send-welcome: {_app_url_detected}")
+    except Exception as e:
+        print(f"⚠️ Error detecting URL: {e}")
+    
+    result = send_welcome_message()
+    return jsonify({
+        "status": "success" if result else "warning",
+        "message": "Welcome message sent!" if result else "Welcome message not sent (check logs)",
+        "detected_url": _app_url_detected,
+        "chat_id": TELEGRAM_CHAT_ID
+    }), 200
+
+
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""
@@ -487,13 +519,25 @@ def send_welcome_message():
     """
     # محاولة استخدام الرابط المكتشف
     global _app_url_detected
-    app_url = _app_url_detected if _app_url_detected else get_app_url()
+    
+    # محاولة الحصول من متغيرات البيئة أولاً
+    railway_url = os.environ.get('RAILWAY_PUBLIC_DOMAIN') or os.environ.get('RAILWAY_STATIC_URL')
+    if railway_url:
+        if not railway_url.startswith('http'):
+            railway_url = f"https://{railway_url}"
+        _app_url_detected = railway_url
+        app_url = railway_url
+        print(f"✅ Using Railway URL from environment: {app_url}")
+    else:
+        app_url = _app_url_detected if _app_url_detected else get_app_url()
     
     # إذا كان الرابط لا يزال localhost، لا ترسل رسالة
     if not app_url or app_url.startswith('http://localhost') or '127.0.0.1' in app_url:
         print(f"⚠️ Cannot send welcome message: URL is localhost ({app_url})")
         print("💡 Please visit /url endpoint from your Railway domain to get your webhook URL")
         return False
+    
+    print(f"📨 Preparing welcome message with URL: {app_url}")
     
     webhook_url = f"{app_url}/webhook"
     personal_webhook_url = f"{app_url}/personal/{TELEGRAM_CHAT_ID}/webhook"
@@ -672,12 +716,33 @@ def check_welcome():
             
             def send_with_detected_url():
                 time.sleep(1)  # انتظار قليل
-                send_welcome_message()
+                print(f"📨 Attempting to send welcome message with URL: {_app_url_detected}")
+                result = send_welcome_message()
+                if not result:
+                    print("❌ Failed to send welcome message - URL might be invalid")
             
             threading.Thread(target=send_with_detected_url, daemon=True).start()
         else:
-            print(f"⚠️ Could not detect URL from request: {detected_url}")
-            _welcome_sent = True
+            # محاولة الحصول من متغيرات البيئة
+            railway_url = os.environ.get('RAILWAY_PUBLIC_DOMAIN') or os.environ.get('RAILWAY_STATIC_URL')
+            if railway_url:
+                if not railway_url.startswith('http'):
+                    railway_url = f"https://{railway_url}"
+                _app_url_detected = railway_url
+                print(f"✅ Found Railway URL from environment: {railway_url}")
+                _welcome_sent = True
+                
+                def send_with_railway_url():
+                    import time
+                    time.sleep(1)
+                    print(f"📨 Attempting to send welcome message with Railway URL: {railway_url}")
+                    send_welcome_message()
+                
+                import threading
+                threading.Thread(target=send_with_railway_url, daemon=True).start()
+            else:
+                print(f"⚠️ Could not detect URL from request: {detected_url}")
+                _welcome_sent = True
 
 
 if __name__ == '__main__':
