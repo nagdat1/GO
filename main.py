@@ -207,48 +207,75 @@ def format_trading_alert(data):
     """
     تحويل بيانات TradingView إلى رسالة منسقة وجميلة
     Convert TradingView data to formatted message
+    يدعم جميع أنواع التنبيهات - Supports all alert types
     """
+    # إذا كانت البيانات نصاً بسيطاً (string)، أرسلها مباشرة
+    if isinstance(data, str):
+        return f"🔔 *تنبيه*\n\n{data}"
+    
+    # إذا كانت البيانات فارغة أو None، أرسل رسالة افتراضية
+    if not data:
+        return f"🔔 *تنبيه ورد*\n\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    
     # استخراج الرسالة المباشرة أولاً
     message = (data.get('message') or 
                data.get('text') or 
                data.get('msg') or 
-               data.get('alert_message') or "")
+               data.get('alert_message') or 
+               data.get('alert') or "")
     
-    # إذا كانت الرسالة موجودة وليست JSON، استخدمها مباشرة
-    if message and not message.startswith("{") and message != "{}":
-        return message
+    # إذا كانت الرسالة موجودة وليست JSON فارغ، استخدمها مباشرة
+    if message and not message.startswith("{") and message != "{}" and message.strip():
+        # إذا كانت الرسالة نصية بسيطة، أرسلها مع تنسيق بسيط
+        return f"🔔 *تنبيه*\n\n{message}\n\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     
     # استخراج المعلومات من البيانات
     ticker = (data.get('ticker') or 
               data.get('symbol') or 
-              data.get('{{ticker}}') or "")
+              data.get('{{ticker}}') or 
+              data.get('Ticker') or "")
     
     price = (data.get('close') or 
              data.get('price') or 
-             data.get('{{close}}') or "")
+             data.get('{{close}}') or 
+             data.get('Close') or "")
     
     comment = (data.get('comment') or 
                data.get('strategy.order.comment') or 
                data.get('{{strategy.order.comment}}') or 
-               data.get('alert_message') or "")
+               data.get('alert_message') or
+               data.get('message') or "")
     
     time_str = (data.get('time') or 
                 data.get('{{time}}') or 
+                data.get('Time') or
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     
-    timeframe = data.get('{{timeframe}}') or data.get('timeframe') or ""
+    timeframe = (data.get('{{timeframe}}') or 
+                 data.get('timeframe') or 
+                 data.get('Timeframe') or "")
+    
+    # إذا لم توجد معلومات أساسية، أرسل البيانات الخام بشكل منسق
+    if not ticker and not price and not comment:
+        # محاولة تحويل البيانات إلى نص
+        try:
+            data_str = json.dumps(data, indent=2, ensure_ascii=False)
+            return f"🔔 *تنبيه ورد*\n\n```\n{data_str}\n```\n\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        except:
+            return f"🔔 *تنبيه ورد*\n\n{str(data)}\n\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     
     # تحديد نوع الإشارة من التعليق
     signal_type = "📊"
-    if "BUY" in str(comment).upper() or "LONG" in str(comment).upper() or "LE" in str(comment):
+    comment_upper = str(comment).upper()
+    if any(word in comment_upper for word in ["BUY", "LONG", "LE", "شراء", "شرى"]):
         signal_type = "🟢"
-    elif "SELL" in str(comment).upper() or "SHORT" in str(comment).upper() or "SE" in str(comment):
+    elif any(word in comment_upper for word in ["SELL", "SHORT", "SE", "بيع", "بيعي"]):
         signal_type = "🔴"
-    elif "TP" in str(comment).upper() or "TAKE PROFIT" in str(comment).upper():
+    elif any(word in comment_upper for word in ["TP", "TAKE PROFIT", "جني ربح"]):
         signal_type = "🎯"
-    elif "SL" in str(comment).upper() or "STOP LOSS" in str(comment).upper():
+    elif any(word in comment_upper for word in ["SL", "STOP LOSS", "وقف خسارة"]):
         signal_type = "🛑"
-    elif "CLOSE" in str(comment).upper() or "CLOSED" in str(comment).upper():
+    elif any(word in comment_upper for word in ["CLOSE", "CLOSED", "إغلاق"]):
         signal_type = "🔚"
     
     # بناء الرسالة بشكل منسق
@@ -267,9 +294,7 @@ def format_trading_alert(data):
     if comment:
         formatted_msg += f"📝 *Comment:*\n`{comment}`\n"
     
-    if time_str:
-        formatted_msg += f"\n⏰ *Time:* `{time_str}`\n"
-    
+    formatted_msg += f"\n⏰ *Time:* `{time_str}`\n"
     formatted_msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     
     return formatted_msg
@@ -296,27 +321,61 @@ def process_webhook_request():
     """
     معالجة طلب webhook من TradingView
     Process webhook request from TradingView
+    يدعم جميع أنواع التنبيهات - Supports all alert types
     """
     try:
         if request.method == 'POST':
             # استقبال البيانات من TradingView
             data = {}
-            content_type = request.headers.get('Content-Type', '')
+            content_type = request.headers.get('Content-Type', '').lower()
+            raw_data = None
             
-            if 'application/json' in content_type:
-                data = request.get_json() or {}
-            elif 'application/x-www-form-urlencoded' in content_type:
-                data = dict(request.form)
-            else:
-                # محاولة قراءة كـ JSON أولاً
+            # محاولة قراءة البيانات الخام أولاً
+            try:
+                raw_data = request.get_data(as_text=True)
+            except:
+                pass
+            
+            # محاولة قراءة JSON
+            if 'application/json' in content_type or not content_type:
                 try:
-                    data = request.get_json() or {}
+                    data = request.get_json()
+                    if data is None and raw_data:
+                        # محاولة تحليل JSON من البيانات الخام
+                        try:
+                            data = json.loads(raw_data)
+                        except:
+                            pass
                 except:
-                    data = dict(request.form) or dict(request.args)
+                    pass
             
-            # إذا كانت البيانات فارغة، حاول من query parameters
-            if not data:
-                data = dict(request.args)
+            # محاولة قراءة Form Data
+            if not data or (isinstance(data, dict) and len(data) == 0):
+                try:
+                    form_data = dict(request.form)
+                    if form_data:
+                        data = form_data
+                except:
+                    pass
+            
+            # محاولة قراءة Query Parameters
+            if not data or (isinstance(data, dict) and len(data) == 0):
+                try:
+                    args_data = dict(request.args)
+                    if args_data:
+                        data = args_data
+                except:
+                    pass
+            
+            # إذا كانت البيانات نصاً خاماً، استخدمها مباشرة
+            if (not data or (isinstance(data, dict) and len(data) == 0)) and raw_data:
+                data = raw_data.strip()
+            
+            # إذا كانت البيانات فارغة تماماً، استخدم رسالة افتراضية
+            if not data or (isinstance(data, dict) and len(data) == 0):
+                data = {"message": "تنبيه ورد بدون بيانات"}
+            
+            print(f"📥 Received alert data: {data}")
             
             # تحويل البيانات إلى رسالة منسقة
             message = format_trading_alert(data)
@@ -325,6 +384,7 @@ def process_webhook_request():
             result = send_telegram_message(message)
             
             if result and result.get('ok'):
+                print(f"✅ Alert sent successfully to Telegram")
                 return jsonify({
                     "status": "success",
                     "message": "Alert sent to Telegram successfully"
@@ -347,6 +407,8 @@ def process_webhook_request():
             
     except Exception as e:
         print(f"❌ Error in webhook: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             "status": "error",
             "message": str(e)
