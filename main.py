@@ -736,18 +736,32 @@ def verify_webhook():
     project_url = get_project_url()
     correct_webhook = f"{project_url}/personal/{TELEGRAM_CHAT_ID}/webhook" if project_url else "Not detected"
     
+    # بناء رابط متوقع
+    expected_webhook = f"https://go-production.up.railway.app/personal/{TELEGRAM_CHAT_ID}/webhook"
+    
     return jsonify({
         "status": "ok",
-        "telegram_chat_id": TELEGRAM_CHAT_ID,
-        "project_url": project_url or "Not detected",
-        "correct_webhook_url": correct_webhook,
-        "your_link": f"https://go-production.up.railway.app/personal/{TELEGRAM_CHAT_ID}/webhook",
-        "is_correct": correct_webhook == f"https://go-production.up.railway.app/personal/{TELEGRAM_CHAT_ID}/webhook" if project_url else False,
+        "your_info": {
+            "telegram_chat_id": TELEGRAM_CHAT_ID,
+            "bot_username": "@nagdat232_bot",
+        },
+        "project_info": {
+            "detected_url": project_url or "Not detected",
+            "expected_url": "https://go-production.up.railway.app"
+        },
+        "webhook_urls": {
+            "correct_webhook": correct_webhook,
+            "expected_webhook": expected_webhook,
+            "is_correct": correct_webhook == expected_webhook if project_url else False
+        },
+        "copy_this_url_for_tradingview": expected_webhook,
         "instructions": {
-            "1": "Copy the webhook URL above",
-            "2": "Paste it in TradingView Alert webhook field",
-            "3": "Test by sending an alert"
-        }
+            "step_1": f"Copy this URL: {expected_webhook}",
+            "step_2": "Open TradingView and go to Alert settings",
+            "step_3": "Paste the URL in the 'Webhook URL' field",
+            "step_4": "Save and test by sending an alert"
+        },
+        "important_note": "Make sure you have sent /start to @nagdat232_bot in Telegram first!"
     }), 200
 
 
@@ -780,6 +794,35 @@ def check_env():
     }), 200
 
 
+@app.route('/get-bot-info', methods=['GET'])
+def get_bot_info():
+    """
+    الحصول على معلومات البوت من Telegram
+    Get bot information from Telegram
+    """
+    try:
+        url = f"{TELEGRAM_API_URL}/getMe"
+        response = requests.get(url, timeout=10)
+        result = response.json()
+        
+        return jsonify({
+            "status": "ok" if result.get('ok') else "error",
+            "bot_info": result.get('result', {}),
+            "bot_username": result.get('result', {}).get('username', 'N/A'),
+            "bot_name": result.get('result', {}).get('first_name', 'N/A'),
+            "instructions": {
+                "1": "Open Telegram and search for the bot username above",
+                "2": "Click Start or send /start to the bot",
+                "3": "Then try sending messages again"
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+
 @app.route('/test-telegram', methods=['GET'])
 def test_telegram():
     """
@@ -804,11 +847,19 @@ def test_telegram():
         }
         
         if result.get('ok'):
+            chat_info = result.get('result', {}).get('chat', {})
             response_data["message"] = "✅ Test message sent successfully! Check your Telegram."
             response_data["bot_info"] = {
                 "message_id": result.get('result', {}).get('message_id'),
-                "chat": result.get('result', {}).get('chat', {}),
+                "chat": chat_info,
+                "chat_id_received": chat_info.get('id'),
+                "chat_username": chat_info.get('username'),
+                "chat_name": f"{chat_info.get('first_name', '')} {chat_info.get('last_name', '')}".strip(),
             }
+            
+            # تحذير إذا كان Chat ID مختلف
+            if str(chat_info.get('id')) != str(TELEGRAM_CHAT_ID):
+                response_data["warning"] = f"⚠️ Chat ID mismatch! Expected: {TELEGRAM_CHAT_ID}, Got: {chat_info.get('id')}"
         else:
             error_code = result.get('error_code')
             error_desc = result.get('description', 'Unknown error')
@@ -816,12 +867,20 @@ def test_telegram():
             response_data["error_code"] = error_code
             
             if error_code == 403:
-                bot_username = TELEGRAM_BOT_TOKEN.split(':')[0] if ':' in TELEGRAM_BOT_TOKEN else 'your_bot'
-                response_data["solution"] = f"Error 403: User has not started a conversation with the bot. Send /start to @{bot_username} first."
+                # الحصول على اسم البوت
+                try:
+                    bot_info_url = f"{TELEGRAM_API_URL}/getMe"
+                    bot_response = requests.get(bot_info_url, timeout=5)
+                    bot_result = bot_response.json()
+                    bot_username = bot_result.get('result', {}).get('username', 'your_bot')
+                except:
+                    bot_username = 'your_bot'
+                
+                response_data["solution"] = f"❌ Error 403: You haven't started a conversation with the bot yet!\n\n💡 SOLUTION:\n1. Open Telegram\n2. Search for: @{bot_username}\n3. Click START or send /start\n4. Then try again"
             elif error_code == 400:
-                response_data["solution"] = "Error 400: Invalid Chat ID. Make sure TELEGRAM_CHAT_ID is correct."
+                response_data["solution"] = "❌ Error 400: Invalid Chat ID. Make sure TELEGRAM_CHAT_ID is correct.\n\n💡 How to get your Chat ID:\n1. Start a chat with @userinfobot on Telegram\n2. It will send you your Chat ID\n3. Update TELEGRAM_CHAT_ID in Railway Variables"
             elif error_code == 401:
-                response_data["solution"] = "Error 401: Invalid Bot Token. Check TELEGRAM_BOT_TOKEN in environment variables."
+                response_data["solution"] = "❌ Error 401: Invalid Bot Token. Check TELEGRAM_BOT_TOKEN in Railway Variables."
         
         return jsonify(response_data), 200 if result.get('ok') else 400
         
