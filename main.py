@@ -57,8 +57,9 @@ def send_welcome_message():
     Send welcome message when app starts
     """
     try:
+        # بناء رابط webhook بالتنسيق: /personal/{CHAT_ID}/webhook
         if PROJECT_URL:
-            webhook_url = f"{PROJECT_URL}/webhook"
+            webhook_url = f"{PROJECT_URL}/personal/{TELEGRAM_CHAT_ID}/webhook"
             url_note = ""
         else:
             # محاولة الحصول على URL من Railway environment
@@ -66,10 +67,10 @@ def send_welcome_message():
             if railway_url:
                 if not railway_url.startswith('http'):
                     railway_url = f"https://{railway_url}"
-                webhook_url = f"{railway_url}/webhook"
+                webhook_url = f"{railway_url}/personal/{TELEGRAM_CHAT_ID}/webhook"
                 url_note = ""
             else:
-                webhook_url = "https://your-app.railway.app/webhook"
+                webhook_url = f"https://your-app.railway.app/personal/{TELEGRAM_CHAT_ID}/webhook"
                 url_note = "\n\n⚠️ <b>ملاحظة:</b> لم يتم تعيين PROJECT_URL في متغيرات البيئة. يرجى إضافته في Railway Settings ➜ Variables"
         
         # بناء الرسالة باستخدام HTML لتجنب مشاكل Markdown
@@ -87,7 +88,7 @@ def send_welcome_message():
 
 🔗 <b>رابط Webhook للاستخدام في TradingView:</b>
 
-<code>{webhook_url}</code>{url_note}
+<a href="{webhook_url}">{webhook_url}</a>{url_note}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -196,7 +197,8 @@ def home():
         "service": "TradingView to Telegram Bot",
         "status": "running",
         "endpoints": {
-            "/webhook": "POST - Receive TradingView alerts",
+            "/personal/<chat_id>/webhook": "POST - Receive TradingView alerts (personal link)",
+            "/webhook": "POST - Receive TradingView alerts (legacy)",
             "/test": "GET - Send test message to Telegram",
             "/": "GET - This page"
         },
@@ -205,11 +207,10 @@ def home():
     }), 200
 
 
-@app.route('/webhook', methods=['POST', 'GET'])
-def webhook():
+def process_webhook_request():
     """
-    استقبال التنبيهات من TradingView
-    Receive alerts from TradingView
+    معالجة طلب webhook من TradingView
+    Process webhook request from TradingView
     """
     try:
         if request.method == 'POST':
@@ -256,7 +257,6 @@ def webhook():
             return jsonify({
                 "status": "online",
                 "message": "Webhook is ready",
-                "endpoint": "/webhook",
                 "telegram_chat_id": TELEGRAM_CHAT_ID
             }), 200
             
@@ -266,6 +266,31 @@ def webhook():
             "status": "error",
             "message": str(e)
         }), 500
+
+
+@app.route('/personal/<chat_id>/webhook', methods=['POST', 'GET'])
+def personal_webhook(chat_id):
+    """
+    استقبال التنبيهات من TradingView عبر رابط شخصي
+    Receive alerts from TradingView via personal link
+    """
+    # التحقق من أن chat_id يتطابق مع TELEGRAM_CHAT_ID
+    if chat_id != TELEGRAM_CHAT_ID:
+        return jsonify({
+            "status": "error",
+            "message": "Invalid chat ID"
+        }), 403
+    
+    return process_webhook_request()
+
+
+@app.route('/webhook', methods=['POST', 'GET'])
+def webhook():
+    """
+    استقبال التنبيهات من TradingView (endpoint قديم للتوافق)
+    Receive alerts from TradingView (legacy endpoint for compatibility)
+    """
+    return process_webhook_request()
 
 
 @app.route('/test', methods=['GET'])
@@ -324,7 +349,11 @@ def initialize_bot():
     if _welcome_sent:
         return
     
-    webhook_url = f"{PROJECT_URL}/webhook" if PROJECT_URL else "https://your-app.railway.app/webhook"
+    # بناء رابط webhook بالتنسيق الجديد
+    if PROJECT_URL:
+        webhook_url = f"{PROJECT_URL}/personal/{TELEGRAM_CHAT_ID}/webhook"
+    else:
+        webhook_url = f"https://your-app.railway.app/personal/{TELEGRAM_CHAT_ID}/webhook"
     
     print("=" * 60)
     print("🤖 TradingView to Telegram Bot")
