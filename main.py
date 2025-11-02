@@ -14,11 +14,20 @@ from datetime import datetime
 # ═══════════════════════════════════════════════════════════════════════════
 # ⚙️ إعدادات البوت - Bot Settings
 # ═══════════════════════════════════════════════════════════════════════════
-TELEGRAM_BOT_TOKEN = "8361920962:AAFkWchaQStjaD09ayMI8VYm1vadr4p6zEY"
-TELEGRAM_CHAT_ID = "8169000394"
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '8361920962:AAFkWchaQStjaD09ayMI8VYm1vadr4p6zEY')
+TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '8169000394')
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
+# الحصول على رابط المشروع من متغيرات البيئة
+# Railway يوفر RAILWAY_PUBLIC_DOMAIN أو يمكن استخدام RAILWAY_STATIC_URL
+PROJECT_URL = os.environ.get('RAILWAY_PUBLIC_DOMAIN') or os.environ.get('RAILWAY_STATIC_URL') or os.environ.get('PROJECT_URL', '')
+if PROJECT_URL and not PROJECT_URL.startswith('http'):
+    PROJECT_URL = f"https://{PROJECT_URL}"
+
 app = Flask(__name__)
+
+# متغير لتتبع ما إذا تم إرسال رسالة الترحيب
+_welcome_sent = False
 
 
 def send_telegram_message(message, parse_mode="Markdown"):
@@ -38,6 +47,53 @@ def send_telegram_message(message, parse_mode="Markdown"):
     except Exception as e:
         print(f"❌ Error sending message: {e}")
         return {"ok": False, "error": str(e)}
+
+
+def send_welcome_message():
+    """
+    إرسال رسالة ترحيب عند بدء التطبيق
+    Send welcome message when app starts
+    """
+    try:
+        webhook_url = f"{PROJECT_URL}/webhook" if PROJECT_URL else "https://your-app.railway.app/webhook"
+        
+        welcome_msg = f"""🎉 *مرحباً! البوت يعمل الآن*
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🤖 *حالة البوت:* ✅ نشط
+📊 *الخدمة:* TradingView → Telegram
+⏰ *وقت البدء:* {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔗 *رابط Webhook للاستخدام في TradingView:*
+
+`{webhook_url}`
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📝 *تعليمات الاستخدام:*
+1. افتح TradingView
+2. اضغط على Alert (🔔)
+3. ضع الرابط أعلاه في حقل Webhook URL
+4. ابدأ بإرسال التنبيهات!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ البوت جاهز لاستقبال التنبيهات من TradingView
+"""
+        
+        result = send_telegram_message(welcome_msg)
+        if result and result.get('ok'):
+            print("✅ Welcome message sent successfully!")
+            return True
+        else:
+            print(f"⚠️ Failed to send welcome message: {result}")
+            return False
+    except Exception as e:
+        print(f"❌ Error sending welcome message: {e}")
+        return False
 
 
 def format_trading_alert(data):
@@ -235,17 +291,54 @@ def health():
     }), 200
 
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
+# دالة لإرسال رسالة الترحيب عند بدء التطبيق
+def initialize_bot():
+    """
+    تهيئة البوت وإرسال رسالة الترحيب
+    Initialize bot and send welcome message
+    """
+    global _welcome_sent
+    
+    # تجنب إرسال الرسالة أكثر من مرة
+    if _welcome_sent:
+        return
+    
+    webhook_url = f"{PROJECT_URL}/webhook" if PROJECT_URL else "https://your-app.railway.app/webhook"
+    
     print("=" * 60)
     print("🤖 TradingView to Telegram Bot")
     print("=" * 60)
     print(f"\n📱 Bot Token: {TELEGRAM_BOT_TOKEN[:10]}...")
     print(f"💬 Chat ID: {TELEGRAM_CHAT_ID}")
-    print(f"\n🌐 Server starting on port: {port}")
-    print(f"📡 Webhook URL: https://your-app.railway.app/webhook")
-    print(f"\n✅ To test: https://your-app.railway.app/test")
+    print(f"\n🌐 Project URL: {PROJECT_URL if PROJECT_URL else 'Not set (use PROJECT_URL env var)'}")
+    print(f"📡 Webhook URL: {webhook_url}")
+    print(f"\n✅ To test: {PROJECT_URL if PROJECT_URL else 'your-app.railway.app'}/test")
     print("=" * 60)
+    
+    # إرسال رسالة الترحيب
+    print("\n📨 Sending welcome message...")
+    if send_welcome_message():
+        _welcome_sent = True
+    print("=" * 60)
+
+
+# إرسال رسالة الترحيب عند تحميل التطبيق (يعمل مع gunicorn أيضاً)
+@app.before_request
+def before_first_request():
+    """
+    إرسال رسالة الترحيب عند أول طلب (يعمل مع gunicorn)
+    Send welcome message on first request (works with gunicorn)
+    """
+    global _welcome_sent
+    if not _welcome_sent:
+        initialize_bot()
+
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    
+    # تهيئة البوت وإرسال رسالة الترحيب
+    initialize_bot()
     
     # Railway uses gunicorn, but keep this for local testing
     app.run(host='0.0.0.0', port=port, debug=False)

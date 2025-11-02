@@ -30,11 +30,17 @@
 2. **Railway سيكتشف تلقائياً** أنه Python project
 3. **سيبدأ البناء تلقائياً**
 
-### الخطوة 4️⃣: الحصول على URL
+### الخطوة 4️⃣: الحصول على URL وإعداد رسالة الترحيب
 
 1. بعد النشر، ستجد **URL** في قسم **Settings** → **Domains**
 2. أو في **Deployments** → **View Logs** → **Public URL**
 3. الرابط سيبدو مثل: `https://your-app.railway.app`
+4. **لإرسال رسالة ترحيب عند البدء:**
+   - اذهب إلى **Settings** → **Variables**
+   - أضف متغير بيئة جديد:
+     - **اسم المتغير:** `PROJECT_URL`
+     - **القيمة:** `https://your-app.railway.app` (استبدل برابطك الفعلي)
+   - بعد إعادة التشغيل، سترسل رسالة ترحيب تلقائياً تحتوي على رابط Webhook
 
 ### الخطوة 5️⃣: إعداد Webhook في TradingView
 
@@ -82,11 +88,20 @@
    - `TELEGRAM_BOT_TOKEN` = `8361920962:AAFkWchaQStjaD09ayMI8VYm1vadr4p6zEY`
    - `TELEGRAM_CHAT_ID` = `8169000394`
 
-5. في `main.py`، غيّر إلى:
-   ```python
-   TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '8361920962:...')
-   TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '8169000394')
-   ```
+5. في `main.py`، الكود الآن يدعم متغيرات البيئة تلقائياً
+
+### إضافة رابط المشروع:
+
+لإرسال رسالة ترحيب تحتوي على رابط Webhook عند بدء التطبيق:
+
+1. في Railway Dashboard → **Settings** → **Variables**
+2. أضف متغير جديد:
+   - **الاسم:** `PROJECT_URL`
+   - **القيمة:** `https://your-app.railway.app` (استخدم رابطك الفعلي)
+3. بعد إعادة التشغيل، ستصل رسالة ترحيب تلقائياً تحتوي على:
+   - رابط Webhook جاهز للاستخدام
+   - تعليمات الاستخدام
+   - حالة البوت
 
 ---
 
