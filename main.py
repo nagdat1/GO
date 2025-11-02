@@ -100,11 +100,30 @@ def send_telegram_message(message, parse_mode="Markdown"):
         response = requests.post(url, json=data, timeout=10)
         result = response.json()
         
+        # طباعة الاستجابة الكاملة للتحقق
+        print(f"   📬 Telegram API Response: {json.dumps(result, indent=2, ensure_ascii=False)}")
+        
         if result.get('ok'):
             print(f"   ✅ Telegram API: Message sent successfully")
+            # التحقق من وجود result في الاستجابة
+            if 'result' in result:
+                print(f"   ✅ Message ID: {result['result'].get('message_id', 'N/A')}")
+                print(f"   ✅ Chat: {result['result'].get('chat', {}).get('title', result['result'].get('chat', {}).get('username', 'N/A'))}")
         else:
-            print(f"   ❌ Telegram API Error: {result.get('description', 'Unknown error')}")
-            print(f"   ❌ Full response: {result}")
+            error_code = result.get('error_code', 'N/A')
+            error_desc = result.get('description', 'Unknown error')
+            print(f"   ❌ Telegram API Error Code: {error_code}")
+            print(f"   ❌ Telegram API Error: {error_desc}")
+            print(f"   ❌ Full response: {json.dumps(result, indent=2, ensure_ascii=False)}")
+            
+            # رسائل توضيحية للأخطاء الشائعة
+            if error_code == 403:
+                print(f"   ⚠️  Error 403: البوت محظور أو المستخدم لم يبدأ محادثة مع البوت")
+                print(f"   💡 Solution: أرسل /start للبوت أولاً: @{(TELEGRAM_BOT_TOKEN.split(':')[0] if ':' in TELEGRAM_BOT_TOKEN else 'your_bot')}")
+            elif error_code == 400:
+                print(f"   ⚠️  Error 400: Chat ID غير صحيح أو غير موجود")
+            elif error_code == 401:
+                print(f"   ⚠️  Error 401: Bot Token غير صحيح أو منتهي الصلاحية")
         
         return result
     except Exception as e:
@@ -759,6 +778,60 @@ def check_env():
         "project_url_from_module": PROJECT_URL or "NOT SET",
         "recommendation": "If RAILWAY_PUBLIC_DOMAIN is NOT SET, add it in Railway Dashboard → Settings → Variables and redeploy the service."
     }), 200
+
+
+@app.route('/test-telegram', methods=['GET'])
+def test_telegram():
+    """
+    اختبار إرسال رسالة مباشرة إلى Telegram مع تفاصيل كاملة
+    Test sending message directly to Telegram with full details
+    """
+    try:
+        test_message = "🧪 Test message from bot\n\n✅ If you receive this, the bot is working correctly!"
+        
+        print("🧪 Testing Telegram connection...")
+        print(f"   Bot Token: {TELEGRAM_BOT_TOKEN[:20]}...")
+        print(f"   Chat ID: {TELEGRAM_CHAT_ID}")
+        
+        result = send_telegram_message(test_message)
+        
+        response_data = {
+            "status": "ok" if result.get('ok') else "error",
+            "telegram_response": result,
+            "bot_token_prefix": TELEGRAM_BOT_TOKEN[:20] + "..." if TELEGRAM_BOT_TOKEN else "NOT SET",
+            "chat_id": TELEGRAM_CHAT_ID,
+            "message_sent": test_message,
+        }
+        
+        if result.get('ok'):
+            response_data["message"] = "✅ Test message sent successfully! Check your Telegram."
+            response_data["bot_info"] = {
+                "message_id": result.get('result', {}).get('message_id'),
+                "chat": result.get('result', {}).get('chat', {}),
+            }
+        else:
+            error_code = result.get('error_code')
+            error_desc = result.get('description', 'Unknown error')
+            response_data["message"] = f"❌ Failed to send message: {error_desc}"
+            response_data["error_code"] = error_code
+            
+            if error_code == 403:
+                bot_username = TELEGRAM_BOT_TOKEN.split(':')[0] if ':' in TELEGRAM_BOT_TOKEN else 'your_bot'
+                response_data["solution"] = f"Error 403: User has not started a conversation with the bot. Send /start to @{bot_username} first."
+            elif error_code == 400:
+                response_data["solution"] = "Error 400: Invalid Chat ID. Make sure TELEGRAM_CHAT_ID is correct."
+            elif error_code == 401:
+                response_data["solution"] = "Error 401: Invalid Bot Token. Check TELEGRAM_BOT_TOKEN in environment variables."
+        
+        return jsonify(response_data), 200 if result.get('ok') else 400
+        
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
 
 
 # دالة لإرسال رسالة الترحيب عند بدء التطبيق
