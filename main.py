@@ -21,8 +21,14 @@ TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '8169000394')
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 # الحصول على رابط المشروع من متغيرات البيئة
-# Railway يوفر RAILWAY_PUBLIC_DOMAIN أو RAILWAY_STATIC_URL تلقائياً (نفس طريقة المشروع المرجعي)
-RAILWAY_URL = os.getenv('RAILWAY_PUBLIC_DOMAIN') or os.getenv('RAILWAY_STATIC_URL')
+# Railway يوفر RAILWAY_PUBLIC_DOMAIN أو RAILWAY_STATIC_URL (في بعض الحالات يجب إضافته يدوياً)
+# يمكن أيضاً استخدام PUBLIC_URL كبديل
+RAILWAY_URL = (
+    os.getenv('RAILWAY_PUBLIC_DOMAIN') or 
+    os.getenv('RAILWAY_STATIC_URL') or 
+    os.getenv('PUBLIC_URL') or
+    os.getenv('RENDER_EXTERNAL_URL')  # دعم Render أيضاً
+)
 
 # إضافة https إذا لم يكن موجوداً
 if RAILWAY_URL and not RAILWAY_URL.startswith('http'):
@@ -35,7 +41,18 @@ PROJECT_URL = RAILWAY_URL
 if PROJECT_URL:
     print(f"🚂 Railway URL detected at module load: {PROJECT_URL}")
 else:
-    print("⏳ Railway URL not in environment variables, will detect from first HTTP request")
+    print("=" * 70)
+    print("⚠️  RAILWAY URL NOT DETECTED!")
+    print("=" * 70)
+    print("\n📋 QUICK FIX - Add this in Railway Dashboard:")
+    print("   1. Go to: Settings → Variables")
+    print("   2. Click: + New Variable")
+    print("   3. Name:  RAILWAY_PUBLIC_DOMAIN")
+    print("   4. Value: your-app-name.up.railway.app")
+    print("      (Get from: Settings → Domains)")
+    print("\n   Alternative: Add PUBLIC_URL with full URL")
+    print("=" * 70)
+    print("\n⏳ Will try to detect from first HTTP request...")
 
 app = Flask(__name__)
 
@@ -83,10 +100,10 @@ def get_project_url():
             # إزالة رقم المنفذ إذا وُجد
             if ':' in host:
                 host = host.split(':')[0]
-            # التحقق من أنه رابط Railway
-            if 'railway.app' in host or '.up.railway.app' in host:
+            # التحقق من أنه رابط عام (وليس localhost)
+            if 'localhost' not in host and '127.0.0.1' not in host:
                 detected_url = f"https://{request.host}"
-                print(f"✅ Detected Railway URL from request: {detected_url}")
+                print(f"✅ Detected public URL from request: {detected_url}")
                 return detected_url
     except Exception as e:
         pass
@@ -505,8 +522,9 @@ def before_first_request():
                 send_welcome_message_with_url(project_url)
                 _welcome_sent = True
             else:
-                print("⚠️ Could not detect Railway URL from request")
-                _welcome_sent = True  # منع المحاولة مرة أخرى
+                print("⚠️ Could not detect public URL from request (localhost detected)")
+                print("   Please add RAILWAY_PUBLIC_DOMAIN in Railway Settings → Variables")
+                # لا نمنع المحاولة مرة أخرى - ربما الطلب التالي يأتي من الخارج
         except Exception as e:
             print(f"❌ Error in before_first_request: {e}")
             import traceback
