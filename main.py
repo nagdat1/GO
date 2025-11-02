@@ -35,7 +35,7 @@ PROJECT_URL = RAILWAY_URL
 if PROJECT_URL:
     print(f"🚂 Railway URL detected at module load: {PROJECT_URL}")
 else:
-    print("⏳ Railway URL not available at module load, will detect on first HTTP request")
+    print("⏳ Railway URL not in environment variables, will detect from first HTTP request")
 
 app = Flask(__name__)
 
@@ -64,10 +64,10 @@ def send_telegram_message(message, parse_mode="Markdown"):
 
 def get_project_url():
     """
-    الحصول على رابط المشروع من Railway (نفس طريقة المشروع المرجعي)
-    Get project URL from Railway (same method as reference project)
+    الحصول على رابط المشروع من Railway أو من request
+    Get project URL from Railway or from request
     """
-    # طريقة بسيطة ومباشرة مثل المشروع المرجعي
+    # أولاً: محاولة من متغيرات البيئة
     railway_url = os.getenv('RAILWAY_PUBLIC_DOMAIN') or os.getenv('RAILWAY_STATIC_URL')
     
     if railway_url:
@@ -75,7 +75,23 @@ def get_project_url():
             railway_url = f"https://{railway_url}"
         return railway_url
     
-    # إذا لم يتم العثور، استخدم PROJECT_URL (المحفوظ عند البدء)
+    # ثانياً: محاولة استخراج من request.host (إذا كان هناك request نشط)
+    try:
+        from flask import has_request_context, request
+        if has_request_context() and request and request.host:
+            host = request.host
+            # إزالة رقم المنفذ إذا وُجد
+            if ':' in host:
+                host = host.split(':')[0]
+            # التحقق من أنه رابط Railway
+            if 'railway.app' in host or '.up.railway.app' in host:
+                detected_url = f"https://{request.host}"
+                print(f"✅ Detected Railway URL from request: {detected_url}")
+                return detected_url
+    except Exception as e:
+        pass
+    
+    # ثالثاً: استخدم PROJECT_URL إذا كان محفوظاً
     return PROJECT_URL
 
 
@@ -431,17 +447,28 @@ def initialize_bot():
 
 def send_welcome_on_startup():
     """
-    إرسال رسالة الترحيب بعد فترة قصيرة من بدء التطبيق
-    Send welcome message after a short delay from app startup
+    إرسال طلب HTTP ذاتي لتشغيل before_request وإرسال رسالة الترحيب
+    Send self HTTP request to trigger before_request and send welcome message
     """
     global _welcome_sent
     try:
-        # انتظر 8 ثوانٍ لضمان أن التطبيق بدأ بشكل كامل وأن gunicorn جاهز
-        print("⏳ Waiting 8 seconds before sending welcome message...")
-        time.sleep(8)
+        # انتظر 10 ثوانٍ لضمان أن gunicorn جاهز
+        print("⏳ Waiting 10 seconds for gunicorn to be ready...")
+        time.sleep(10)
+        
         if not _welcome_sent:
-            print("📨 Starting welcome message initialization...")
-            initialize_bot()
+            print("📨 Triggering self-request to detect Railway URL...")
+            # محاولة إرسال طلب HTTP للـ health endpoint لتشغيل before_request
+            try:
+                # الحصول على PORT من البيئة
+                port = os.getenv('PORT', '8080')
+                # إرسال طلب محلي
+                import requests
+                response = requests.get(f"http://localhost:{port}/health", timeout=5)
+                print(f"✅ Self-request sent, status: {response.status_code}")
+            except Exception as e:
+                print(f"⚠️ Self-request failed: {e}")
+                print("   Welcome message will be sent on first external HTTP request")
         else:
             print("✅ Welcome message already sent")
     except Exception as e:
@@ -465,14 +492,26 @@ def before_first_request():
     
     # إرسال رسالة الترحيب عند أول طلب إذا لم يتم إرسالها
     if not _welcome_sent:
-        print("📨 First HTTP request detected, sending welcome message...")
-        # الحصول على الرابط من Railway
-        project_url = get_project_url()
-        if project_url:
-            send_welcome_message_with_url(project_url)
-        else:
-            initialize_bot()
-        _welcome_sent = True
+        try:
+            print("📨 First HTTP request detected!")
+            print(f"   Request host: {request.host}")
+            print(f"   Request URL: {request.url}")
+            
+            # الحصول على الرابط من request.host
+            project_url = get_project_url()
+            
+            if project_url:
+                print(f"✅ Sending welcome message with URL: {project_url}")
+                send_welcome_message_with_url(project_url)
+                _welcome_sent = True
+            else:
+                print("⚠️ Could not detect Railway URL from request")
+                _welcome_sent = True  # منع المحاولة مرة أخرى
+        except Exception as e:
+            print(f"❌ Error in before_first_request: {e}")
+            import traceback
+            traceback.print_exc()
+            _welcome_sent = True  # منع المحاولة مرة أخرى
 
 
 if __name__ == '__main__':
