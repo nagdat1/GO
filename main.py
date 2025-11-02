@@ -165,11 +165,25 @@ def format_trading_alert(data):
 @app.route('/', methods=['GET'])
 def home():
     """الصفحة الرئيسية - Home page"""
-    app_url = get_app_url()
+    # الحصول على الرابط من الطلب الحالي أولاً
+    try:
+        scheme = request.scheme if hasattr(request, 'scheme') and request.scheme else 'https'
+        host = request.host if hasattr(request, 'host') else None
+        if host and host != 'localhost' and 'localhost' not in host and '127.0.0.1' not in host:
+            app_url = f"{scheme}://{host}"
+            # حفظ الرابط المكتشف
+            global _app_url_detected
+            _app_url_detected = app_url
+        else:
+            app_url = get_app_url()
+    except:
+        app_url = get_app_url()
+    
     return jsonify({
         "service": "TradingView to Telegram Bot",
         "status": "running",
         "app_url": app_url,
+        "current_host": request.host if hasattr(request, 'host') else "unknown",
         "endpoints": {
             "/webhook": f"{app_url}/webhook - POST - Receive TradingView alerts (default)",
             "/personal/<chat_id>/webhook": f"{app_url}/personal/{TELEGRAM_CHAT_ID}/webhook - POST - Personal webhook",
@@ -252,12 +266,23 @@ def personal_webhook(chat_id):
                 }), 500
                 
         elif request.method == 'GET':
+            # الحصول على الرابط من الطلب الحالي
+            try:
+                scheme = request.scheme if request.scheme else 'https'
+                host = request.host
+                current_url = f"{scheme}://{host}"
+            except:
+                current_url = get_app_url()
+            
+            webhook_url = f"{current_url}/personal/{chat_id}/webhook"
+            
             return jsonify({
                 "status": "online",
                 "message": "Personal webhook is ready",
                 "endpoint": f"/personal/{chat_id}/webhook",
                 "chat_id": chat_id,
-                "webhook_url": f"{get_app_url()}/personal/{chat_id}/webhook"
+                "webhook_url": webhook_url,
+                "current_host": request.host if hasattr(request, 'host') else "unknown"
             }), 200
             
     except Exception as e:
@@ -383,23 +408,29 @@ def get_webhook_url():
     الحصول على رابط Webhook الخاص بك
     Get your webhook URL
     """
-    # الحصول على الرابط من الطلب الحالي
+    # الحصول على الرابط من الطلب الحالي (الأهم)
     try:
-        scheme = request.scheme if request.scheme else 'https'
-        host = request.host
-        if host and host != 'localhost' and 'localhost' not in host:
+        scheme = request.scheme if hasattr(request, 'scheme') and request.scheme else 'https'
+        host = request.host if hasattr(request, 'host') else None
+        
+        if host and host != 'localhost' and 'localhost' not in host and '127.0.0.1' not in host:
             app_url = f"{scheme}://{host}"
             # حفظ الرابط المكتشف
             global _app_url_detected
             _app_url_detected = app_url
+            print(f"✅ Detected URL from request: {app_url}")
         else:
             app_url = get_app_url()
-    except:
+            print(f"⚠️ Using fallback URL: {app_url}")
+    except Exception as e:
+        print(f"⚠️ Error getting URL from request: {e}")
         app_url = get_app_url()
     
     # رابط Webhook العادي والخاص
     webhook_url = f"{app_url}/webhook"
     personal_webhook_url = f"{app_url}/personal/{TELEGRAM_CHAT_ID}/webhook"
+    
+    print(f"📡 Generated URLs - Webhook: {webhook_url}, Personal: {personal_webhook_url}")
     
     # إرسال الرابط في رسالة Telegram أيضاً
     url_message = f"""
@@ -457,12 +488,20 @@ def send_welcome_message():
     إرسال رسالة ترحيب عند بدء البوت
     Send welcome message when bot starts
     """
-    # الحصول على الرابط الفعلي
-    app_url = get_app_url()
+    # محاولة استخدام الرابط المكتشف
+    global _app_url_detected
+    app_url = _app_url_detected if _app_url_detected else get_app_url()
+    
+    # إذا لم يكن هناك رابط مكتشف، استخدم get_app_url
+    if not app_url or app_url.startswith('http://localhost'):
+        app_url = get_app_url()
+    
     webhook_url = f"{app_url}/webhook"
     personal_webhook_url = f"{app_url}/personal/{TELEGRAM_CHAT_ID}/webhook"
     test_url = f"{app_url}/test"
     welcome_url = f"{app_url}/welcome"
+    
+    print(f"📨 Sending welcome with URL: {app_url}")
     
     welcome_message = """
 🎉 *مرحباً! البوت يعمل الآن* 🎉
