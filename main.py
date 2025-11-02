@@ -23,8 +23,8 @@ app = Flask(__name__)
 
 def get_app_url():
     """
-    الحصول على رابط التطبيق الفعلي
-    Get the actual application URL
+    الحصول على رابط التطبيق الفعلي من Railway
+    Get the actual application URL from Railway
     """
     global _app_url_detected
     
@@ -32,32 +32,29 @@ def get_app_url():
     if _app_url_detected:
         return _app_url_detected
     
+    # محاولة الحصول من متغيرات البيئة (Railway) - الأولوية الأولى
+    railway_url = os.environ.get('RAILWAY_PUBLIC_DOMAIN') or os.environ.get('RAILWAY_STATIC_URL')
+    if railway_url:
+        # التأكد من وجود https
+        if not railway_url.startswith('http'):
+            railway_url = f"https://{railway_url}"
+        _app_url_detected = railway_url
+        print(f"✅ Found Railway URL from environment: {railway_url}")
+        return railway_url
+    
     # محاولة الحصول من request عند وجوده (للتشغيل على السيرفر)
     try:
         from flask import has_request_context, request
         if has_request_context() and request:
-            scheme = request.scheme if request.scheme else 'https'
-            host = request.host
-            if host and host != 'localhost' and 'localhost' not in host:
+            scheme = request.scheme if hasattr(request, 'scheme') and request.scheme else 'https'
+            host = request.host if hasattr(request, 'host') else None
+            if host and host != 'localhost' and 'localhost' not in host and '127.0.0.1' not in host:
                 detected = f"{scheme}://{host}"
                 _app_url_detected = detected
+                print(f"✅ Detected URL from request: {detected}")
                 return detected
     except:
         pass
-    
-    # محاولة الحصول من متغيرات البيئة (Railway)
-    railway_domain = os.environ.get('RAILWAY_PUBLIC_DOMAIN')
-    if railway_domain:
-        return f"https://{railway_domain}"
-    
-    railway_url = os.environ.get('RAILWAY_STATIC_URL')
-    if railway_url:
-        return railway_url
-    
-    # محاولة من متغيرات أخرى محتملة
-    service_domain = os.environ.get('RAILWAY_SERVICE_DOMAIN')
-    if service_domain:
-        return f"https://{service_domain}"
     
     # إذا لم يكن متاحاً، استخدم localhost للتطوير المحلي
     port = os.environ.get('PORT', '5000')
@@ -607,10 +604,30 @@ def on_startup():
     print(f"\n📱 Bot Token: {TELEGRAM_BOT_TOKEN[:10]}...")
     print(f"💬 Chat ID: {TELEGRAM_CHAT_ID}")
     print(f"\n🌐 Server starting...")
-    print(f"📡 Waiting for first request to detect URL...")
-    print(f"✅ To test: /test endpoint")
-    print("=" * 60)
-    print("\n💡 Note: Welcome message will be sent after first HTTP request")
+    
+    # محاولة الحصول على الرابط من Railway مباشرة
+    railway_url = os.environ.get('RAILWAY_PUBLIC_DOMAIN') or os.environ.get('RAILWAY_STATIC_URL')
+    if railway_url:
+        if not railway_url.startswith('http'):
+            railway_url = f"https://{railway_url}"
+        global _app_url_detected
+        _app_url_detected = railway_url
+        print(f"✅ Railway URL detected: {railway_url}")
+        
+        # إرسال رسالة الترحيب مباشرة
+        import threading
+        import time
+        
+        def send_startup_message():
+            time.sleep(2)  # انتظار قليل لضمان أن السيرفر جاهز
+            send_welcome_message()
+        
+        threading.Thread(target=send_startup_message, daemon=True).start()
+        print(f"📨 Welcome message will be sent shortly...")
+    else:
+        print(f"📡 Waiting for first request to detect URL...")
+        print(f"✅ To test: /test endpoint or /url")
+    
     print("=" * 60)
 
 
