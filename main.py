@@ -67,7 +67,35 @@ def get_app_url():
 def send_welcome_with_url():
     """إرسال رسالة ترحيب مع الرابط المكتشف"""
     import time
-    time.sleep(1)  # انتظار قليل لضمان أن الرابط تم اكتشافه
+    time.sleep(2)  # انتظار قليل لضمان أن الرابط تم اكتشافه من الطلب
+    
+    # الحصول على الرابط من الطلب الحالي
+    try:
+        from flask import has_request_context
+        if has_request_context() and request:
+            scheme = request.scheme if hasattr(request, 'scheme') and request.scheme else 'https'
+            host = request.host if hasattr(request, 'host') else None
+            
+            if host and host != 'localhost' and 'localhost' not in host and '127.0.0.1' not in host:
+                app_url = f"{scheme}://{host}"
+                # حفظ الرابط المكتشف
+                global _app_url_detected
+                _app_url_detected = app_url
+                print(f"✅ Detected URL from first request: {app_url}")
+            else:
+                app_url = get_app_url()
+        else:
+            app_url = get_app_url()
+    except Exception as e:
+        print(f"⚠️ Error detecting URL: {e}")
+        app_url = get_app_url()
+    
+    # إذا كان الرابط لا يزال localhost، لا ترسل رسالة
+    if app_url and ('localhost' in app_url or '127.0.0.1' in app_url):
+        print(f"⚠️ URL is still localhost ({app_url}), skipping welcome message")
+        print("💡 Please visit /url endpoint to get your webhook URL")
+        return
+    
     send_welcome_message()
 
 
@@ -586,25 +614,17 @@ def welcome():
 # Function to send welcome message when bot starts
 def on_startup():
     """تشغيل عند بدء البوت"""
-    # الحصول على الرابط الفعلي
-    app_url = get_app_url()
-    webhook_url = f"{app_url}/webhook"
-    test_url = f"{app_url}/test"
-    
     print("=" * 60)
     print("🤖 TradingView to Telegram Bot")
     print("=" * 60)
     print(f"\n📱 Bot Token: {TELEGRAM_BOT_TOKEN[:10]}...")
     print(f"💬 Chat ID: {TELEGRAM_CHAT_ID}")
     print(f"\n🌐 Server starting...")
-    print(f"🔗 App URL: {app_url}")
-    print(f"📡 Webhook URL: {webhook_url}")
-    print(f"✅ To test: {test_url}")
+    print(f"📡 Waiting for first request to detect URL...")
+    print(f"✅ To test: /test endpoint")
     print("=" * 60)
-    
-    # إرسال رسالة ترحيب
-    print("\n📨 Sending welcome message...")
-    send_welcome_message()
+    print("\n💡 Note: Welcome message will be sent after first HTTP request")
+    print("=" * 60)
 
 
 # متغير لتتبع ما إذا تم إرسال رسالة الترحيب
@@ -628,14 +648,20 @@ def detect_app_url_from_request():
 def check_welcome():
     """إرسال رسالة ترحيب عند أول طلب"""
     global _welcome_sent, _app_url_detected
+    
+    # تخطي إذا كان الطلب من نفس البوت (لتجنب loop)
+    if request.path in ['/welcome', '/test']:
+        return
+    
     if not _welcome_sent:
         # محاولة الحصول على الرابط من الطلب الفعلي
         detected_url = detect_app_url_from_request()
-        if detected_url:
+        if detected_url and 'localhost' not in detected_url and '127.0.0.1' not in detected_url:
             _app_url_detected = detected_url
             print(f"✅ Detected app URL from request: {detected_url}")
         
         _welcome_sent = True
+        
         # تشغيل في thread منفصل لتجنب تأخير الطلب
         import threading
         threading.Thread(target=send_welcome_with_url, daemon=True).start()
@@ -644,7 +670,7 @@ def check_welcome():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     
-    # إرسال رسالة ترحيب عند التشغيل المحلي
+    # عند التشغيل المحلي فقط، أرسل رسالة (localhost سيكون صحيح)
     on_startup()
     
     print(f"\n🌐 Server starting on port: {port}")
@@ -655,15 +681,6 @@ if __name__ == '__main__':
 else:
     # عند التشغيل على Railway/Gunicorn
     # When running on Railway/Gunicorn
-    import threading
-    import time
-    
-    def delayed_startup():
-        """بدء متأخر لضمان أن الخادم جاهز"""
-        time.sleep(3)  # انتظار 3 ثواني لضمان أن الخادم جاهز تماماً
-        on_startup()
-    
-    # تشغيل في thread منفصل
-    startup_thread = threading.Thread(target=delayed_startup, daemon=True)
-    startup_thread.start()
+    # فقط اطبع معلومات البدء، الرسالة ستُرسل عند أول طلب HTTP
+    on_startup()
 
