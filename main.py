@@ -30,6 +30,8 @@ app = Flask(__name__)
 
 # متغير لتتبع ما إذا تم إرسال رسالة الترحيب
 _welcome_sent = False
+# متغير لحفظ الرابط المكتشف تلقائياً
+_detected_project_url = None
 
 
 def send_telegram_message(message, parse_mode="Markdown"):
@@ -51,27 +53,96 @@ def send_telegram_message(message, parse_mode="Markdown"):
         return {"ok": False, "error": str(e)}
 
 
+def get_project_url():
+    """
+    الحصول على رابط المشروع تلقائياً من مصادر مختلفة
+    Get project URL automatically from various sources
+    """
+    global _detected_project_url
+    
+    # إذا تم اكتشاف الرابط مسبقاً، استخدمه
+    if _detected_project_url:
+        return _detected_project_url
+    
+    # 1. محاولة من متغيرات البيئة المباشرة
+    if PROJECT_URL:
+        _detected_project_url = PROJECT_URL
+        return PROJECT_URL
+    
+    # 2. محاولة من Railway environment variables
+    railway_url = os.environ.get('RAILWAY_PUBLIC_DOMAIN') or os.environ.get('RAILWAY_STATIC_URL')
+    if railway_url:
+        if not railway_url.startswith('http'):
+            railway_url = f"https://{railway_url}"
+        _detected_project_url = railway_url
+        return railway_url
+    
+    # 3. محاولة من request headers (إذا كان متاحاً)
+    try:
+        from flask import has_request_context, request
+        if has_request_context() and request and request.host:
+            host = request.host
+            # التحقق من أن الرابط من Railway
+            if 'railway.app' in host or 'railway.dev' in host:
+                detected_url = f"https://{host}"
+                _detected_project_url = detected_url
+                return detected_url
+    except:
+        pass
+    
+    # 4. محاولة من Railway service URL
+    service_url = os.environ.get('RAILWAY_SERVICE_URL')
+    if service_url:
+        if not service_url.startswith('http'):
+            service_url = f"https://{service_url}"
+        _detected_project_url = service_url
+        return service_url
+    
+    return None
+
+
+def send_welcome_message_with_url(project_url=None):
+    """
+    إرسال رسالة ترحيب مع رابط محدد
+    Send welcome message with specified URL
+    """
+    if not project_url:
+        project_url = get_project_url()
+    
+    webhook_url = f"{project_url}/personal/{TELEGRAM_CHAT_ID}/webhook"
+    url_note = ""
+    return _build_and_send_welcome_message(webhook_url, url_note, project_url)
+
+
 def send_welcome_message():
     """
     إرسال رسالة ترحيب عند بدء التطبيق
     Send welcome message when app starts
     """
+    # محاولة الحصول على الرابط تلقائياً
+    detected_url = get_project_url()
+    
+    if detected_url:
+        webhook_url = f"{detected_url}/personal/{TELEGRAM_CHAT_ID}/webhook"
+        url_note = ""
+        print(f"✅ Project URL detected automatically: {detected_url}")
+    else:
+        # إذا لم يتم العثور على الرابط، سيتم إعادة المحاولة عند أول طلب HTTP
+        webhook_url = f"https://detecting.../personal/{TELEGRAM_CHAT_ID}/webhook"
+        url_note = """
+        
+⏳ <b>جاري اكتشاف الرابط تلقائياً...</b>
+سيتم تحديث الرابط عند أول طلب HTTP."""
+    
+    return _build_and_send_welcome_message(webhook_url, url_note, detected_url)
+
+
+def _build_and_send_welcome_message(webhook_url, url_note, project_url=None):
+    """
+    بناء وإرسال رسالة الترحيب
+    Build and send welcome message
+    """
     try:
-        # بناء رابط webhook بالتنسيق: /personal/{CHAT_ID}/webhook
-        if PROJECT_URL:
-            webhook_url = f"{PROJECT_URL}/personal/{TELEGRAM_CHAT_ID}/webhook"
-            url_note = ""
-        else:
-            # محاولة الحصول على URL من Railway environment
-            railway_url = os.environ.get('RAILWAY_PUBLIC_DOMAIN') or os.environ.get('RAILWAY_STATIC_URL')
-            if railway_url:
-                if not railway_url.startswith('http'):
-                    railway_url = f"https://{railway_url}"
-                webhook_url = f"{railway_url}/personal/{TELEGRAM_CHAT_ID}/webhook"
-                url_note = ""
-            else:
-                webhook_url = f"https://your-app.railway.app/personal/{TELEGRAM_CHAT_ID}/webhook"
-                url_note = "\n\n⚠️ <b>ملاحظة:</b> لم يتم تعيين PROJECT_URL في متغيرات البيئة. يرجى إضافته في Railway Settings ➜ Variables"
         
         # بناء الرسالة باستخدام HTML لتجنب مشاكل Markdown
         time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -354,11 +425,14 @@ def initialize_bot():
     if _welcome_sent:
         return
     
-    # بناء رابط webhook بالتنسيق الجديد
-    if PROJECT_URL:
+    # محاولة الحصول على الرابط تلقائياً
+    detected_url = get_project_url()
+    if detected_url:
+        webhook_url = f"{detected_url}/personal/{TELEGRAM_CHAT_ID}/webhook"
+    elif PROJECT_URL:
         webhook_url = f"{PROJECT_URL}/personal/{TELEGRAM_CHAT_ID}/webhook"
     else:
-        webhook_url = f"https://your-app.railway.app/personal/{TELEGRAM_CHAT_ID}/webhook"
+        webhook_url = f"https://detecting.../personal/{TELEGRAM_CHAT_ID}/webhook"
     
     print("=" * 60)
     print("🤖 TradingView to Telegram Bot")
@@ -367,7 +441,11 @@ def initialize_bot():
     print(f"💬 Chat ID: {TELEGRAM_CHAT_ID}")
     print(f"\n🌐 Project URL: {PROJECT_URL if PROJECT_URL else 'Not set (use PROJECT_URL env var)'}")
     print(f"📡 Webhook URL: {webhook_url}")
-    print(f"\n✅ To test: {PROJECT_URL if PROJECT_URL else 'your-app.railway.app'}/test")
+    if PROJECT_URL:
+        print(f"\n✅ To test: {PROJECT_URL}/test")
+    else:
+        print(f"\n⚠️  PROJECT_URL not set! Add it in Railway Settings → Variables")
+        print(f"   Example: https://botbybit-production.up.railway.app")
     print("=" * 60)
     
     # إرسال رسالة الترحيب
@@ -406,13 +484,32 @@ welcome_thread.start()
 @app.before_request
 def before_first_request():
     """
-    إرسال رسالة الترحيب عند أول طلب (نسخة احتياطية)
-    Send welcome message on first request (backup method)
+    اكتشاف الرابط تلقائياً وإرسال رسالة الترحيب عند أول طلب
+    Auto-detect URL and send welcome message on first request
     """
-    global _welcome_sent
+    global _welcome_sent, _detected_project_url
+    
+    # محاولة اكتشاف الرابط من request headers
+    try:
+        from flask import has_request_context
+        if has_request_context() and request and request.host and not _detected_project_url:
+            host = request.host
+            # التحقق من أن الرابط من Railway
+            if 'railway.app' in host or 'railway.dev' in host:
+                detected_url = f"https://{host}"
+                _detected_project_url = detected_url
+                print(f"✅ Auto-detected project URL from request: {detected_url}")
+                
+                # إذا لم يتم إرسال رسالة الترحيب بعد، أرسلها مع الرابط المكتشف
+                if not _welcome_sent:
+                    send_welcome_message_with_url(detected_url)
+                    _welcome_sent = True
+    except Exception as e:
+        print(f"⚠️ Could not detect URL from request: {e}")
+    
+    # إذا لم يتم إرسال الرسالة بعد، أرسلها
     if not _welcome_sent:
-        print("📨 First request detected, sending welcome message as backup...")
-        # أرسل مباشرة بدون تأخير عند أول طلب
+        print("📨 First request detected, sending welcome message...")
         initialize_bot()
 
 
