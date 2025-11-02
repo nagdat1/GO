@@ -164,42 +164,9 @@ def format_trading_alert(data):
 
 @app.route('/', methods=['GET'])
 def home():
-    """الصفحة الرئيسية - Home page"""
-    # الحصول على الرابط من الطلب الحالي أولاً
-    try:
-        scheme = request.scheme if hasattr(request, 'scheme') and request.scheme else 'https'
-        host = request.host if hasattr(request, 'host') else None
-        if host and host != 'localhost' and 'localhost' not in host and '127.0.0.1' not in host:
-            app_url = f"{scheme}://{host}"
-            # حفظ الرابط المكتشف
-            global _app_url_detected
-            _app_url_detected = app_url
-        else:
-            app_url = get_app_url()
-    except:
-        app_url = get_app_url()
-    
-    return jsonify({
-        "service": "TradingView to Telegram Bot",
-        "status": "running",
-        "app_url": app_url,
-        "current_host": request.host if hasattr(request, 'host') else "unknown",
-        "endpoints": {
-            "/webhook": f"{app_url}/webhook - POST - Receive TradingView alerts (default)",
-            "/personal/<chat_id>/webhook": f"{app_url}/personal/{TELEGRAM_CHAT_ID}/webhook - POST - Personal webhook",
-            "/test": f"{app_url}/test - GET - Send test message to Telegram",
-            "/welcome": f"{app_url}/welcome - GET - Send welcome message",
-            "/url": f"{app_url}/url - GET - Get webhook URL (sent to Telegram)",
-            "/link": f"{app_url}/link - GET - Get webhook URL (sent to Telegram)",
-            "/webhook-url": f"{app_url}/webhook-url - GET - Get webhook URL (sent to Telegram)",
-            "/health": f"{app_url}/health - GET - Health check",
-            "/": f"{app_url}/ - GET - This page"
-        },
-        "telegram_chat_id": TELEGRAM_CHAT_ID,
-        "webhook_url": f"{app_url}/webhook",
-        "personal_webhook_url": f"{app_url}/personal/{TELEGRAM_CHAT_ID}/webhook",
-        "instructions": f"Add {app_url}/webhook or {app_url}/personal/{TELEGRAM_CHAT_ID}/webhook to TradingView Alert webhook field"
-    }), 200
+    """الصفحة الرئيسية - ترسل الرسالة تلقائياً"""
+    # عند فتح الصفحة الرئيسية، ترسل الرسالة مباشرة
+    return get_webhook_url()
 
 
 @app.route('/personal/<chat_id>/webhook', methods=['POST', 'GET'])
@@ -445,16 +412,28 @@ def get_webhook_url():
             # حفظ الرابط المكتشف
             global _app_url_detected
             _app_url_detected = app_url
-            print(f"✅ Detected Railway URL: {app_url}")
+            print(f"✅ Detected Railway URL from request: {app_url}")
         else:
-            app_url = get_app_url()
-            print(f"⚠️ Using fallback URL: {app_url}")
+            # محاولة الحصول من متغيرات البيئة
+            railway_url = os.environ.get('RAILWAY_PUBLIC_DOMAIN') or os.environ.get('RAILWAY_STATIC_URL')
+            if railway_url:
+                if not railway_url.startswith('http'):
+                    railway_url = f"https://{railway_url}"
+                app_url = railway_url
+                _app_url_detected = railway_url
+                print(f"✅ Using Railway URL from environment: {app_url}")
+            else:
+                app_url = get_app_url()
+                print(f"⚠️ Using fallback URL: {app_url}")
     except Exception as e:
         print(f"⚠️ Error getting URL: {e}")
         app_url = get_app_url()
     
     # رابط Webhook المخصص
     personal_webhook_url = f"{app_url}/personal/{TELEGRAM_CHAT_ID}/webhook"
+    
+    print(f"📡 Generated webhook URL: {personal_webhook_url}")
+    print(f"📤 Sending welcome message to Telegram (chat_id: {TELEGRAM_CHAT_ID})...")
     
     # إرسال رسالة الترحيب الكاملة مع الرابط
     welcome_message = f"""
@@ -503,11 +482,12 @@ def get_webhook_url():
             "railway_url": app_url
         }), 200
     else:
-        print(f"❌ Failed to send message: {result}")
+        print(f"❌ Failed to send message. Error: {result}")
         return jsonify({
             "status": "error",
             "message": "Failed to send message to Telegram",
             "webhook_url": personal_webhook_url,
+            "chat_id": TELEGRAM_CHAT_ID,
             "error": result
         }), 500
 
@@ -698,7 +678,7 @@ def check_welcome():
     global _welcome_sent, _app_url_detected
     
     # تخطي إذا كان الطلب من نفس البوت (لتجنب loop)
-    if request.path in ['/welcome', '/test', '/url', '/link', '/webhook-url']:
+    if request.path in ['/', '/welcome', '/test', '/url', '/link', '/webhook-url', '/send-welcome']:
         return
     
     if not _welcome_sent:
