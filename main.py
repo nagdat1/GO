@@ -403,10 +403,10 @@ def health():
 @app.route('/webhook-url', methods=['GET'])
 def get_webhook_url():
     """
-    الحصول على رابط Webhook الخاص بك
-    Get your webhook URL
+    الحصول على رابط Webhook وإرسال رسالة ترحيب
+    Get webhook URL and send welcome message
     """
-    # الحصول على الرابط من الطلب الحالي (الأهم)
+    # الحصول على الرابط من الطلب الحالي (من Railway)
     try:
         scheme = request.scheme if hasattr(request, 'scheme') and request.scheme else 'https'
         host = request.host if hasattr(request, 'host') else None
@@ -416,35 +416,36 @@ def get_webhook_url():
             # حفظ الرابط المكتشف
             global _app_url_detected
             _app_url_detected = app_url
-            print(f"✅ Detected URL from request: {app_url}")
+            print(f"✅ Detected Railway URL: {app_url}")
         else:
             app_url = get_app_url()
             print(f"⚠️ Using fallback URL: {app_url}")
     except Exception as e:
-        print(f"⚠️ Error getting URL from request: {e}")
+        print(f"⚠️ Error getting URL: {e}")
         app_url = get_app_url()
     
-    # رابط Webhook العادي والخاص
-    webhook_url = f"{app_url}/webhook"
+    # رابط Webhook المخصص
     personal_webhook_url = f"{app_url}/personal/{TELEGRAM_CHAT_ID}/webhook"
     
-    print(f"📡 Generated URLs - Webhook: {webhook_url}, Personal: {personal_webhook_url}")
-    
-    # إرسال الرابط في رسالة Telegram أيضاً
-    url_message = f"""
-🔗 *روابط Webhook الخاصة بك* 🔗
+    # إرسال رسالة الترحيب الكاملة مع الرابط
+    welcome_message = f"""
+🎉 *مرحباً! البوت يعمل الآن* 🎉
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📡 *الرابط المخصص (موصى به):*
+🤖 *حالة البوت:* ✅ نشط
+📊 *الخدمة:* TradingView → Telegram
+⏰ *وقت البدء:* {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+✅ *البوت جاهز لاستقبال التنبيهات من TradingView!*
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔗 *رابط Webhook الخاص بك:*
+
+📡 *انسخ هذا الرابط وأضفه في TradingView:*
 
 `{personal_webhook_url}`
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📡 *الرابط العام:*
-
-`{webhook_url}`
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -452,33 +453,34 @@ def get_webhook_url():
 1. افتح TradingView
 2. اذهب إلى Alerts → Create Alert
 3. فعّل Webhook URL
-4. انسخ الرابط المخصص أعلاه والصقه
-5. احفظ! ✅
+4. انسخ الرابط أعلاه والصقه
+5. احفظ الإعدادات! 🚀
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-⏰ *الوقت:* {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-📱 *Chat ID:* `{TELEGRAM_CHAT_ID}`
+📝 *ملاحظة:* هذا هو رابطك الفعلي على Railway - استخدمه مباشرة في TradingView!
     """
     
     # إرسال الرسالة إلى Telegram
-    send_telegram_message(url_message)
+    result = send_telegram_message(welcome_message)
     
-    # إرجاع الرابط في JSON أيضاً
-    return jsonify({
-        "status": "success",
-        "webhook_url": webhook_url,
-        "personal_webhook_url": personal_webhook_url,
-        "chat_id": TELEGRAM_CHAT_ID,
-        "message": "Webhook URLs sent to Telegram",
-        "instructions": {
-            "step1": "Open TradingView",
-            "step2": "Go to Alerts → Create Alert",
-            "step3": "Enable Webhook URL",
-            "step4": f"Paste: {personal_webhook_url}",
-            "step5": "Save"
-        }
-    }), 200
+    if result and result.get('ok'):
+        print("✅ Welcome message with webhook URL sent successfully!")
+        return jsonify({
+            "status": "success",
+            "message": "Welcome message sent to Telegram",
+            "webhook_url": personal_webhook_url,
+            "chat_id": TELEGRAM_CHAT_ID,
+            "railway_url": app_url
+        }), 200
+    else:
+        print(f"❌ Failed to send message: {result}")
+        return jsonify({
+            "status": "error",
+            "message": "Failed to send message to Telegram",
+            "webhook_url": personal_webhook_url,
+            "error": result
+        }), 500
 
 
 def send_welcome_message():
@@ -571,10 +573,23 @@ def welcome():
     """
     إرسال رسالة ترحيب - Send welcome message
     """
-    send_welcome_message()
+    # الحصول على الرابط من الطلب الحالي
+    try:
+        scheme = request.scheme if hasattr(request, 'scheme') and request.scheme else 'https'
+        host = request.host if hasattr(request, 'host') else None
+        
+        if host and host != 'localhost' and 'localhost' not in host and '127.0.0.1' not in host:
+            global _app_url_detected
+            _app_url_detected = f"{scheme}://{host}"
+            print(f"✅ Detected URL in /welcome: {_app_url_detected}")
+    except Exception as e:
+        print(f"⚠️ Error detecting URL: {e}")
+    
+    result = send_welcome_message()
     return jsonify({
-        "status": "success",
-        "message": "Welcome message sent!"
+        "status": "success" if result else "warning",
+        "message": "Welcome message sent!" if result else "Welcome message not sent (URL might be localhost)",
+        "detected_url": _app_url_detected
     }), 200
 
 
