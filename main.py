@@ -26,8 +26,26 @@ def get_app_url():
     الحصول على رابط التطبيق الفعلي
     Get the actual application URL
     """
+    global _app_url_detected
+    
+    # استخدام الرابط المكتشف من الطلب الأول
+    if _app_url_detected:
+        return _app_url_detected
+    
+    # محاولة الحصول من request عند وجوده (للتشغيل على السيرفر)
+    try:
+        from flask import has_request_context, request
+        if has_request_context() and request:
+            scheme = request.scheme if request.scheme else 'https'
+            host = request.host
+            if host and host != 'localhost' and 'localhost' not in host:
+                detected = f"{scheme}://{host}"
+                _app_url_detected = detected
+                return detected
+    except:
+        pass
+    
     # محاولة الحصول من متغيرات البيئة (Railway)
-    # Railway يوفر RAILWAY_PUBLIC_DOMAIN أو RAILWAY_STATIC_URL
     railway_domain = os.environ.get('RAILWAY_PUBLIC_DOMAIN')
     if railway_domain:
         return f"https://{railway_domain}"
@@ -41,18 +59,16 @@ def get_app_url():
     if service_domain:
         return f"https://{service_domain}"
     
-    # محاولة الحصول من request عند وجوده (للتشغيل على السيرفر)
-    try:
-        from flask import has_request_context, request
-        if has_request_context():
-            # الحصول من الطلب الحالي
-            return f"{request.scheme}://{request.host}"
-    except:
-        pass
-    
     # إذا لم يكن متاحاً، استخدم localhost للتطوير المحلي
     port = os.environ.get('PORT', '5000')
     return f"http://localhost:{port}"
+
+
+def send_welcome_with_url():
+    """إرسال رسالة ترحيب مع الرابط المكتشف"""
+    import time
+    time.sleep(1)  # انتظار قليل لضمان أن الرابط تم اكتشافه
+    send_welcome_message()
 
 
 def send_telegram_message(message, parse_mode="Markdown"):
@@ -155,7 +171,8 @@ def home():
         "status": "running",
         "app_url": app_url,
         "endpoints": {
-            "/webhook": f"{app_url}/webhook - POST - Receive TradingView alerts",
+            "/webhook": f"{app_url}/webhook - POST - Receive TradingView alerts (default)",
+            "/personal/<chat_id>/webhook": f"{app_url}/personal/{TELEGRAM_CHAT_ID}/webhook - POST - Personal webhook",
             "/test": f"{app_url}/test - GET - Send test message to Telegram",
             "/welcome": f"{app_url}/welcome - GET - Send welcome message",
             "/url": f"{app_url}/url - GET - Get webhook URL (sent to Telegram)",
@@ -166,8 +183,89 @@ def home():
         },
         "telegram_chat_id": TELEGRAM_CHAT_ID,
         "webhook_url": f"{app_url}/webhook",
-        "instructions": f"Add {app_url}/webhook to TradingView Alert webhook field"
+        "personal_webhook_url": f"{app_url}/personal/{TELEGRAM_CHAT_ID}/webhook",
+        "instructions": f"Add {app_url}/webhook or {app_url}/personal/{TELEGRAM_CHAT_ID}/webhook to TradingView Alert webhook field"
     }), 200
+
+
+@app.route('/personal/<chat_id>/webhook', methods=['POST', 'GET'])
+def personal_webhook(chat_id):
+    """
+    Webhook مخصص لكل مستخدم باستخدام Chat ID
+    Personal webhook for each user using Chat ID
+    """
+    try:
+        # التحقق من Chat ID (اختياري - للأمان)
+        # يمكنك إزالة هذا الشرط إذا أردت أن يكون مفتوحاً
+        if chat_id != TELEGRAM_CHAT_ID:
+            print(f"⚠️ Warning: Webhook called with different chat_id: {chat_id}")
+        
+        if request.method == 'POST':
+            # استقبال البيانات من TradingView
+            data = {}
+            content_type = request.headers.get('Content-Type', '')
+            
+            if 'application/json' in content_type:
+                data = request.get_json() or {}
+            elif 'application/x-www-form-urlencoded' in content_type:
+                data = dict(request.form)
+            else:
+                try:
+                    data = request.get_json() or {}
+                except:
+                    data = dict(request.form) or dict(request.args)
+            
+            if not data:
+                data = dict(request.args)
+            
+            # تحويل البيانات إلى رسالة منسقة
+            message = format_trading_alert(data)
+            
+            # إرسال الرسالة إلى Telegram باستخدام Chat ID المحدد
+            original_chat_id = TELEGRAM_CHAT_ID
+            try:
+                # استخدام Chat ID من الرابط
+                url = f"{TELEGRAM_API_URL}/sendMessage"
+                telegram_data = {
+                    "chat_id": chat_id,
+                    "text": message,
+                    "parse_mode": "Markdown"
+                }
+                response = requests.post(url, json=telegram_data, timeout=10)
+                result = response.json()
+            except Exception as e:
+                print(f"❌ Error sending to chat_id {chat_id}: {e}")
+                result = {"ok": False, "error": str(e)}
+            
+            if result and result.get('ok'):
+                return jsonify({
+                    "status": "success",
+                    "message": f"Alert sent to Telegram (chat_id: {chat_id})",
+                    "chat_id": chat_id
+                }), 200
+            else:
+                print(f"❌ Telegram API Error: {result}")
+                return jsonify({
+                    "status": "error",
+                    "message": f"Failed to send to Telegram (chat_id: {chat_id})",
+                    "error": result
+                }), 500
+                
+        elif request.method == 'GET':
+            return jsonify({
+                "status": "online",
+                "message": "Personal webhook is ready",
+                "endpoint": f"/personal/{chat_id}/webhook",
+                "chat_id": chat_id,
+                "webhook_url": f"{get_app_url()}/personal/{chat_id}/webhook"
+            }), 200
+            
+    except Exception as e:
+        print(f"❌ Error in personal webhook: {e}")
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
 
 
 @app.route('/webhook', methods=['POST', 'GET'])
@@ -285,16 +383,37 @@ def get_webhook_url():
     الحصول على رابط Webhook الخاص بك
     Get your webhook URL
     """
-    app_url = get_app_url()
+    # الحصول على الرابط من الطلب الحالي
+    try:
+        scheme = request.scheme if request.scheme else 'https'
+        host = request.host
+        if host and host != 'localhost' and 'localhost' not in host:
+            app_url = f"{scheme}://{host}"
+            # حفظ الرابط المكتشف
+            global _app_url_detected
+            _app_url_detected = app_url
+        else:
+            app_url = get_app_url()
+    except:
+        app_url = get_app_url()
+    
+    # رابط Webhook العادي والخاص
     webhook_url = f"{app_url}/webhook"
+    personal_webhook_url = f"{app_url}/personal/{TELEGRAM_CHAT_ID}/webhook"
     
     # إرسال الرابط في رسالة Telegram أيضاً
     url_message = f"""
-🔗 *رابط Webhook الخاص بك* 🔗
+🔗 *روابط Webhook الخاصة بك* 🔗
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📡 *انسخ هذا الرابط وأضفه في TradingView:*
+📡 *الرابط المخصص (موصى به):*
+
+`{personal_webhook_url}`
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📡 *الرابط العام:*
 
 `{webhook_url}`
 
@@ -304,12 +423,13 @@ def get_webhook_url():
 1. افتح TradingView
 2. اذهب إلى Alerts → Create Alert
 3. فعّل Webhook URL
-4. انسخ الرابط أعلاه والصقه
+4. انسخ الرابط المخصص أعلاه والصقه
 5. احفظ! ✅
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ⏰ *الوقت:* {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+📱 *Chat ID:* `{TELEGRAM_CHAT_ID}`
     """
     
     # إرسال الرسالة إلى Telegram
@@ -319,12 +439,14 @@ def get_webhook_url():
     return jsonify({
         "status": "success",
         "webhook_url": webhook_url,
-        "message": "Webhook URL sent to Telegram",
+        "personal_webhook_url": personal_webhook_url,
+        "chat_id": TELEGRAM_CHAT_ID,
+        "message": "Webhook URLs sent to Telegram",
         "instructions": {
             "step1": "Open TradingView",
             "step2": "Go to Alerts → Create Alert",
             "step3": "Enable Webhook URL",
-            "step4": f"Paste: {webhook_url}",
+            "step4": f"Paste: {personal_webhook_url}",
             "step5": "Save"
         }
     }), 200
@@ -338,6 +460,7 @@ def send_welcome_message():
     # الحصول على الرابط الفعلي
     app_url = get_app_url()
     webhook_url = f"{app_url}/webhook"
+    personal_webhook_url = f"{app_url}/personal/{TELEGRAM_CHAT_ID}/webhook"
     test_url = f"{app_url}/test"
     welcome_url = f"{app_url}/welcome"
     
@@ -356,7 +479,10 @@ def send_welcome_message():
 
 🔗 *روابط البوت:*
 
-📡 *Webhook (للإشارات):*
+📡 *Webhook المخصص (للإشارات) - موصى به:*
+`{personal_webhook_url}`
+
+📡 *Webhook العام:*
 `{webhook_url}`
 
 🧪 *اختبار البوت:*
@@ -371,7 +497,9 @@ def send_welcome_message():
 1. افتح TradingView
 2. اذهب إلى Alerts → Create Alert
 3. فعّل Webhook URL
-4. ضع هذا الرابط:
+4. ضع هذا الرابط (المخصص):
+   `{personal_webhook_url}`
+   أو الرابط العام:
    `{webhook_url}`
 5. احفظ الإعدادات! 🚀
 
@@ -381,6 +509,7 @@ def send_welcome_message():
     """.format(
         time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         webhook_url=webhook_url,
+        personal_webhook_url=personal_webhook_url,
         test_url=test_url,
         welcome_url=welcome_url
     )
@@ -441,16 +570,36 @@ def on_startup():
 
 # متغير لتتبع ما إذا تم إرسال رسالة الترحيب
 _welcome_sent = False
+_app_url_detected = None
+
+def detect_app_url_from_request():
+    """الحصول على الرابط الفعلي من الطلب"""
+    try:
+        from flask import has_request_context
+        if has_request_context() and request:
+            scheme = request.scheme if request.scheme else 'https'
+            host = request.host
+            if host and host != 'localhost' and 'localhost' not in host:
+                return f"{scheme}://{host}"
+    except:
+        pass
+    return None
 
 @app.before_request
 def check_welcome():
     """إرسال رسالة ترحيب عند أول طلب"""
-    global _welcome_sent
+    global _welcome_sent, _app_url_detected
     if not _welcome_sent:
+        # محاولة الحصول على الرابط من الطلب الفعلي
+        detected_url = detect_app_url_from_request()
+        if detected_url:
+            _app_url_detected = detected_url
+            print(f"✅ Detected app URL from request: {detected_url}")
+        
         _welcome_sent = True
         # تشغيل في thread منفصل لتجنب تأخير الطلب
         import threading
-        threading.Thread(target=on_startup, daemon=True).start()
+        threading.Thread(target=send_welcome_with_url, daemon=True).start()
 
 
 if __name__ == '__main__':
