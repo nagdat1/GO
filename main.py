@@ -72,10 +72,24 @@ def send_telegram_message(message, parse_mode="Markdown"):
             "text": message,
             "parse_mode": parse_mode
         }
+        print(f"   📤 Telegram API URL: {url}")
+        print(f"   📤 Chat ID: {TELEGRAM_CHAT_ID}")
+        print(f"   📤 Message length: {len(message)} characters")
+        
         response = requests.post(url, json=data, timeout=10)
-        return response.json()
+        result = response.json()
+        
+        if result.get('ok'):
+            print(f"   ✅ Telegram API: Message sent successfully")
+        else:
+            print(f"   ❌ Telegram API Error: {result.get('description', 'Unknown error')}")
+            print(f"   ❌ Full response: {result}")
+        
+        return result
     except Exception as e:
-        print(f"❌ Error sending message: {e}")
+        print(f"   ❌ Exception sending message: {e}")
+        import traceback
+        traceback.print_exc()
         return {"ok": False, "error": str(e)}
 
 
@@ -333,29 +347,39 @@ def process_webhook_request():
     """
     try:
         if request.method == 'POST':
+            print(f"📥 Processing POST request...")
+            
             # استقبال البيانات من TradingView
             data = {}
             content_type = request.headers.get('Content-Type', '').lower()
             raw_data = None
             
+            print(f"   Content-Type: {content_type}")
+            
             # محاولة قراءة البيانات الخام أولاً
             try:
                 raw_data = request.get_data(as_text=True)
-            except:
-                pass
+                print(f"   Raw data length: {len(raw_data) if raw_data else 0}")
+                if raw_data:
+                    print(f"   Raw data preview: {raw_data[:200]}")
+            except Exception as e:
+                print(f"   ⚠️ Could not read raw data: {e}")
             
             # محاولة قراءة JSON
             if 'application/json' in content_type or not content_type:
                 try:
                     data = request.get_json()
-                    if data is None and raw_data:
+                    if data:
+                        print(f"   ✅ Got JSON data: {data}")
+                    elif raw_data:
                         # محاولة تحليل JSON من البيانات الخام
                         try:
                             data = json.loads(raw_data)
-                        except:
-                            pass
-                except:
-                    pass
+                            print(f"   ✅ Parsed JSON from raw data: {data}")
+                        except Exception as e:
+                            print(f"   ⚠️ Could not parse JSON: {e}")
+                except Exception as e:
+                    print(f"   ⚠️ Could not get JSON: {e}")
             
             # محاولة قراءة Form Data
             if not data or (isinstance(data, dict) and len(data) == 0):
@@ -363,8 +387,9 @@ def process_webhook_request():
                     form_data = dict(request.form)
                     if form_data:
                         data = form_data
-                except:
-                    pass
+                        print(f"   ✅ Got form data: {data}")
+                except Exception as e:
+                    print(f"   ⚠️ Could not read form data: {e}")
             
             # محاولة قراءة Query Parameters
             if not data or (isinstance(data, dict) and len(data) == 0):
@@ -372,41 +397,51 @@ def process_webhook_request():
                     args_data = dict(request.args)
                     if args_data:
                         data = args_data
-                except:
-                    pass
+                        print(f"   ✅ Got query params: {data}")
+                except Exception as e:
+                    print(f"   ⚠️ Could not read query params: {e}")
             
             # إذا كانت البيانات نصاً خاماً، استخدمها مباشرة
             if (not data or (isinstance(data, dict) and len(data) == 0)) and raw_data:
                 data = raw_data.strip()
+                print(f"   ✅ Using raw data as string: {data[:100]}")
             
             # إذا كانت البيانات فارغة تماماً، استخدم رسالة افتراضية
             if not data or (isinstance(data, dict) and len(data) == 0):
                 data = {"message": "تنبيه ورد بدون بيانات"}
+                print(f"   ⚠️ No data found, using default message")
             
-            print(f"📥 Received alert data: {data}")
+            print(f"📥 Final alert data: {data}")
             
             # تحويل البيانات إلى رسالة منسقة
             message = format_trading_alert(data)
+            print(f"📝 Formatted message: {message[:200]}...")
             
             # إرسال الرسالة إلى Telegram
+            print(f"📤 Sending to Telegram (Chat ID: {TELEGRAM_CHAT_ID})...")
             result = send_telegram_message(message)
+            print(f"📬 Telegram API response: {result}")
             
             if result and result.get('ok'):
-                print(f"✅ Alert sent successfully to Telegram")
+                print(f"✅ Alert sent successfully to Telegram!")
                 return jsonify({
                     "status": "success",
                     "message": "Alert sent to Telegram successfully"
                 }), 200
             else:
-                print(f"❌ Telegram API Error: {result}")
+                error_msg = result.get('description', 'Unknown error') if result else 'No response'
+                print(f"❌ Telegram API Error: {error_msg}")
+                print(f"   Full response: {result}")
                 return jsonify({
                     "status": "error",
                     "message": "Failed to send to Telegram",
-                    "error": result
+                    "error": error_msg,
+                    "full_error": result
                 }), 500
                 
         elif request.method == 'GET':
             # للتحقق من أن الخادم يعمل
+            print(f"✅ GET request - Webhook is ready")
             return jsonify({
                 "status": "online",
                 "message": "Webhook is ready",
@@ -419,7 +454,8 @@ def process_webhook_request():
         traceback.print_exc()
         return jsonify({
             "status": "error",
-            "message": str(e)
+            "message": str(e),
+            "traceback": traceback.format_exc()
         }), 500
 
 
