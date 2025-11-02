@@ -2,8 +2,13 @@
 nixPkgs = ['python311', 'python311Packages.pip']
 
 [phases.install]
-cmds = ['pip install -r requirements.txt']
+cmds = [
+    'python -m venv /opt/venv',
+    'export PATH="/opt/venv/bin:$PATH"',
+    '/opt/venv/bin/pip install --upgrade pip',
+    '/opt/venv/bin/pip install -r requirements.txt'
+]
 
-[start]
-cmd = 'gunicorn --bind 0.0.0.0:$PORT main:app'
+[phases.start]
+cmd = '/opt/venv/bin/gunicorn --bind 0.0.0.0:$PORT main:app'
 

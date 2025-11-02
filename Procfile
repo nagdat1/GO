@@ -1,1 +1,1 @@
-web: gunicorn --bind 0.0.0.0:$PORT main:app
+web: /opt/venv/bin/gunicorn --bind 0.0.0.0:$PORT main:app
