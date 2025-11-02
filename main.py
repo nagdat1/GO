@@ -180,9 +180,157 @@ def format_trading_alert(data):
 
 @app.route('/', methods=['GET'])
 def home():
-    """الصفحة الرئيسية - ترسل الرسالة تلقائياً"""
-    # عند فتح الصفحة الرئيسية، ترسل الرسالة مباشرة
-    return get_webhook_url()
+    """الصفحة الرئيسية - تعرض رابط Railway مباشرة"""
+    # الحصول على الرابط من الطلب الحالي
+    try:
+        scheme = request.scheme if hasattr(request, 'scheme') and request.scheme else 'https'
+        host = request.host if hasattr(request, 'host') else None
+        
+        if host and host != 'localhost' and 'localhost' not in host and '127.0.0.1' not in host:
+            app_url = f"{scheme}://{host}"
+            global _app_url_detected
+            _app_url_detected = app_url
+            
+            # إرسال رسالة ترحيب تلقائياً
+            import threading
+            def send_auto():
+                try:
+                    welcome_msg = f"""
+🎉 البوت يعمل الآن!
+Bot is Running!
+
+🌐 رابطك على Railway:
+{app_url}
+
+📡 رابط Webhook:
+{app_url}/personal/{TELEGRAM_CHAT_ID}/webhook
+
+💡 افتح هذا الرابط في TradingView Alerts
+                    """
+                    send_telegram_message(welcome_msg, parse_mode=None)
+                except:
+                    pass
+            threading.Thread(target=send_auto, daemon=True).start()
+            
+            return f"""
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>✅ TradingView to Telegram Bot</title>
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }}
+        .container {{
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }}
+        h1 {{
+            color: #4CAF50;
+            text-align: center;
+        }}
+        .url-box {{
+            background: #e8f5e9;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 4px solid #4CAF50;
+            word-break: break-all;
+        }}
+        .url-box strong {{
+            color: #2e7d32;
+        }}
+        .copy-btn {{
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+        }}
+        .copy-btn:hover {{
+            background: #45a049;
+        }}
+        .endpoint {{
+            background: #fff3e0;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>✅ البوت يعمل بنجاح!</h1>
+        <p style="text-align: center; color: #666;">TradingView to Telegram Bot is Running</p>
+        
+        <div class="url-box">
+            <strong>🌐 رابط Railway الخاص بك:</strong><br>
+            <span id="railway-url">{app_url}</span>
+            <button class="copy-btn" onclick="copyUrl('{app_url}')">📋 نسخ الرابط</button>
+        </div>
+        
+        <div class="url-box">
+            <strong>📡 رابط Webhook (للإشارات) - انسخ هذا:</strong><br>
+            <span id="webhook-url">{app_url}/personal/{TELEGRAM_CHAT_ID}/webhook</span>
+            <button class="copy-btn" onclick="copyUrl('{app_url}/personal/{TELEGRAM_CHAT_ID}/webhook')">📋 نسخ رابط Webhook</button>
+        </div>
+        
+        <div class="endpoint">
+            <strong>🧪 Endpoints المتاحة:</strong><br>
+            • <a href="/test">/test</a> - اختبار البوت<br>
+            • <a href="/url">/url</a> - الحصول على رابط وإرسال رسالة ترحيب<br>
+            • <a href="/diagnose">/diagnose</a> - فحص شامل للبوت<br>
+            • <a href="/health">/health</a> - فحص الحالة
+        </div>
+        
+        <p style="margin-top: 20px; color: #666;">
+            💡 <strong>ملاحظة:</strong> تم إرسال رسالة ترحيب إلى Telegram تحتوي على رابط Webhook الخاص بك!
+        </p>
+    </div>
+    
+    <script>
+        function copyUrl(url) {{
+            navigator.clipboard.writeText(url).then(function() {{
+                alert('✅ تم نسخ الرابط!');
+            }}, function() {{
+                // Fallback for older browsers
+                const textarea = document.createElement('textarea');
+                textarea.value = url;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                alert('✅ تم نسخ الرابط!');
+            }});
+        }}
+    </script>
+</body>
+</html>
+            """
+        else:
+            # إذا كان localhost، عرض صفحة بسيطة
+            return jsonify({
+                "service": "TradingView to Telegram Bot",
+                "status": "running",
+                "message": "Open this URL from Railway domain to see your webhook link",
+                "note": "This is running on localhost. Deploy to Railway to get a public URL."
+            }), 200
+    except Exception as e:
+        return jsonify({
+            "service": "TradingView to Telegram Bot",
+            "status": "running",
+            "error": str(e)
+        }), 200
 
 
 @app.route('/personal/<chat_id>/webhook', methods=['POST', 'GET'])
@@ -259,14 +407,14 @@ def personal_webhook(chat_id):
             
             webhook_url = f"{current_url}/personal/{chat_id}/webhook"
             
-            return jsonify({
+    return jsonify({
                 "status": "online",
                 "message": "Personal webhook is ready",
                 "endpoint": f"/personal/{chat_id}/webhook",
                 "chat_id": chat_id,
                 "webhook_url": webhook_url,
                 "current_host": request.host if hasattr(request, 'host') else "unknown"
-            }), 200
+    }), 200
             
     except Exception as e:
         print(f"❌ Error in personal webhook: {e}")
