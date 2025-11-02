@@ -429,13 +429,22 @@ def personal_webhook(chat_id):
     استقبال التنبيهات من TradingView عبر رابط شخصي
     Receive alerts from TradingView via personal link
     """
+    print(f"📨 Webhook request received!")
+    print(f"   Method: {request.method}")
+    print(f"   Chat ID from URL: {chat_id}")
+    print(f"   Expected Chat ID: {TELEGRAM_CHAT_ID}")
+    print(f"   Request URL: {request.url}")
+    print(f"   Headers: {dict(request.headers)}")
+    
     # التحقق من أن chat_id يتطابق مع TELEGRAM_CHAT_ID
-    if chat_id != TELEGRAM_CHAT_ID:
+    if str(chat_id) != str(TELEGRAM_CHAT_ID):
+        print(f"❌ Invalid chat ID: {chat_id} != {TELEGRAM_CHAT_ID}")
         return jsonify({
             "status": "error",
-            "message": "Invalid chat ID"
+            "message": f"Invalid chat ID. Expected: {TELEGRAM_CHAT_ID}, Got: {chat_id}"
         }), 403
     
+    print(f"✅ Chat ID verified, processing webhook request...")
     return process_webhook_request()
 
 
@@ -577,6 +586,30 @@ def health():
     return jsonify({
         "status": "healthy",
         "service": "TradingView to Telegram Bot"
+    }), 200
+
+
+@app.route('/verify-webhook', methods=['GET'])
+def verify_webhook():
+    """
+    التحقق من صحة رابط Webhook
+    Verify webhook URL is correct
+    """
+    project_url = get_project_url()
+    correct_webhook = f"{project_url}/personal/{TELEGRAM_CHAT_ID}/webhook" if project_url else "Not detected"
+    
+    return jsonify({
+        "status": "ok",
+        "telegram_chat_id": TELEGRAM_CHAT_ID,
+        "project_url": project_url or "Not detected",
+        "correct_webhook_url": correct_webhook,
+        "your_link": f"https://go-production.up.railway.app/personal/{TELEGRAM_CHAT_ID}/webhook",
+        "is_correct": correct_webhook == f"https://go-production.up.railway.app/personal/{TELEGRAM_CHAT_ID}/webhook" if project_url else False,
+        "instructions": {
+            "1": "Copy the webhook URL above",
+            "2": "Paste it in TradingView Alert webhook field",
+            "3": "Test by sending an alert"
+        }
     }), 200
 
 
