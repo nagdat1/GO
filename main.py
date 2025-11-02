@@ -500,6 +500,137 @@ def simple_test():
         }), 500
 
 
+@app.route('/diagnose', methods=['GET'])
+def diagnose():
+    """
+    تشخيص شامل للبوت - يفحص كل شيء
+    Full bot diagnostics - checks everything
+    """
+    diagnosis = {
+        "bot_token_check": {},
+        "chat_id_check": {},
+        "message_test": {},
+        "recent_chats": {}
+    }
+    
+    # 1. فحص Bot Token
+    try:
+        url = f"{TELEGRAM_API_URL}/getMe"
+        response = requests.get(url, timeout=10)
+        bot_result = response.json()
+        
+        diagnosis["bot_token_check"] = {
+            "valid": bot_result.get('ok', False),
+            "bot_info": bot_result.get('result') if bot_result.get('ok') else None,
+            "error": bot_result.get('description') if not bot_result.get('ok') else None
+        }
+    except Exception as e:
+        diagnosis["bot_token_check"] = {
+            "valid": False,
+            "error": str(e)
+        }
+    
+    # 2. فحص الرسائل الحديثة للحصول على Chat IDs الصحيحة
+    try:
+        url = f"{TELEGRAM_API_URL}/getUpdates"
+        response = requests.get(url, timeout=10)
+        updates_result = response.json()
+        
+        if updates_result.get('ok'):
+            updates = updates_result.get('result', [])
+            chat_ids = set()
+            chat_details = []
+            
+            for update in updates:
+                if 'message' in update:
+                    chat = update['message']['chat']
+                    chat_id = str(chat['id'])
+                    if chat_id not in chat_ids:
+                        chat_ids.add(chat_id)
+                        chat_details.append({
+                            "chat_id": chat_id,
+                            "type": chat.get('type'),
+                            "username": chat.get('username'),
+                            "first_name": chat.get('first_name'),
+                            "last_name": chat.get('last_name')
+                        })
+            
+            diagnosis["recent_chats"] = {
+                "found": len(chat_details),
+                "chats": chat_details,
+                "configured_chat_id": TELEGRAM_CHAT_ID,
+                "configured_chat_found": TELEGRAM_CHAT_ID in chat_ids
+            }
+        else:
+            diagnosis["recent_chats"] = {
+                "error": updates_result.get('description')
+            }
+    except Exception as e:
+        diagnosis["recent_chats"] = {
+            "error": str(e)
+        }
+    
+    # 3. محاولة إرسال رسالة اختبار
+    try:
+        url = f"{TELEGRAM_API_URL}/sendMessage"
+        test_msg = f"Test from diagnose endpoint at {datetime.now().strftime('%H:%M:%S')}"
+        data = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": test_msg
+        }
+        
+        response = requests.post(url, json=data, timeout=10)
+        msg_result = response.json()
+        
+        diagnosis["message_test"] = {
+            "success": msg_result.get('ok', False),
+            "response": msg_result,
+            "error_code": msg_result.get('error_code'),
+            "error_description": msg_result.get('description')
+        }
+    except Exception as e:
+        diagnosis["message_test"] = {
+            "success": False,
+            "error": str(e)
+        }
+    
+    # تقرير نهائي
+    all_good = (
+        diagnosis["bot_token_check"].get("valid") and
+        diagnosis["message_test"].get("success")
+    )
+    
+    diagnosis["summary"] = {
+        "status": "healthy" if all_good else "issues_detected",
+        "bot_token_valid": diagnosis["bot_token_check"].get("valid", False),
+        "message_sent": diagnosis["message_test"].get("success", False),
+        "configured_chat_id": TELEGRAM_CHAT_ID,
+        "bot_token_preview": f"{TELEGRAM_BOT_TOKEN[:15]}..."
+    }
+    
+    # توصيات
+    recommendations = []
+    if not diagnosis["bot_token_check"].get("valid"):
+        recommendations.append("Bot Token is invalid. Get a new token from @BotFather")
+    
+    if not diagnosis["message_test"].get("success"):
+        error_code = diagnosis["message_test"].get("error_code")
+        if error_code == 403:
+            bot_username = diagnosis["bot_token_check"].get("bot_info", {}).get("username", "your_bot")
+            recommendations.append(f"Bot is blocked or user hasn't started chat. Open Telegram and send /start to @{bot_username}")
+        elif error_code == 400:
+            recommendations.append("Chat ID might be incorrect. Check 'recent_chats' section for valid Chat IDs")
+        else:
+            recommendations.append(f"Error {error_code}: {diagnosis['message_test'].get('error_description')}")
+    
+    if not diagnosis["recent_chats"].get("configured_chat_found", False):
+        recommendations.append(f"Your configured Chat ID ({TELEGRAM_CHAT_ID}) was not found in recent messages. Make sure to send a message to the bot first.")
+    
+    diagnosis["recommendations"] = recommendations
+    
+    return jsonify(diagnosis), 200 if all_good else 500
+
+
 @app.route('/url', methods=['GET'])
 @app.route('/link', methods=['GET'])
 @app.route('/webhook-url', methods=['GET'])
