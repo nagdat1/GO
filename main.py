@@ -247,5 +247,6 @@ if __name__ == '__main__':
     print(f"\n✅ To test: https://your-app.railway.app/test")
     print("=" * 60)
     
+    # Railway uses gunicorn, but keep this for local testing
     app.run(host='0.0.0.0', port=port, debug=False)
 
