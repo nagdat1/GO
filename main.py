@@ -657,6 +657,48 @@ def send_test_alert():
         }), 500
 
 
+@app.route('/test-webhook-direct', methods=['POST', 'GET'])
+def test_webhook_direct():
+    """
+    اختبار webhook مباشرة - محاكاة طلب من TradingView
+    Test webhook directly - simulate TradingView request
+    """
+    print("🧪 Testing webhook endpoint directly...")
+    print(f"   Chat ID: {TELEGRAM_CHAT_ID}")
+    
+    try:
+        # استدعاء process_webhook_request مباشرة
+        # محاكاة طلب POST مع بيانات تجريبية
+        if request.method == 'GET':
+            # للاختبار السريع، أنشئ طلب POST وهمي
+            test_data = {
+                "ticker": "BTC/USDT",
+                "price": "50000",
+                "comment": "TEST ALERT من endpoint /test-webhook-direct",
+                "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            # إرسال البيانات كـ JSON
+            from flask import jsonify as flask_jsonify
+            return flask_jsonify({
+                "status": "info",
+                "message": "Use POST method or call /personal/{chat_id}/webhook",
+                "test_url": f"/personal/{TELEGRAM_CHAT_ID}/webhook",
+                "instructions": "Send POST request to the webhook URL with your alert data"
+            }), 200
+        
+        # إذا كان POST، استخدم process_webhook_request
+        return process_webhook_request()
+    except Exception as e:
+        print(f"❌ Error in test_webhook_direct: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""
