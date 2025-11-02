@@ -1,0 +1,107 @@
+# 🚀 تعليمات النشر على Railway
+
+## ✅ الملفات الجاهزة للنشر
+
+- ✅ `main.py` - الكود الرئيسي
+- ✅ `requirements.txt` - المكتبات المطلوبة
+- ✅ `nixpacks.toml` - إعدادات البناء
+- ✅ `railway.json` - إعدادات النشر
+- ✅ `.gitignore` - تجاهل الملفات غير الضرورية
+
+## 📋 خطوات النشر
+
+### 1️⃣ رفع التغييرات إلى GitHub
+
+```bash
+git add .
+git commit -m "Fix Railway deployment configuration"
+git push origin main
+```
+
+### 2️⃣ في لوحة Railway
+
+1. اذهب إلى https://railway.app/dashboard
+2. اختر مشروعك `GO`
+3. انتظر حتى يكتمل البناء تلقائياً
+4. تحقق من Logs للتأكد من عدم وجود أخطاء
+
+### 3️⃣ الحصول على URL
+
+1. في لوحة Railway، اذهب إلى **Settings** → **Domains**
+2. اضغط **Generate Domain**
+3. انسخ الرابط (مثل: `https://go-production-xxxx.up.railway.app`)
+
+### 4️⃣ اختبار البوت
+
+افتح في المتصفح:
+```
+https://your-app.railway.app/test
+```
+
+يجب أن تستلم رسالة في Telegram ✅
+
+### 5️⃣ إعداد TradingView
+
+في TradingView Alert:
+- **Webhook URL**: `https://your-app.railway.app/webhook`
+- **Message**: 
+```
+{{strategy.order.comment}}
+{{ticker}} - {{close}}
+{{time}}
+```
+
+## 🔧 حل المشاكل
+
+### إذا فشل البناء:
+1. تحقق من Logs في Railway
+2. تأكد من أن جميع الملفات موجودة
+3. تأكد من `requirements.txt` صحيح
+
+### إذا لم تصل الرسائل:
+1. جرب `/test` endpoint
+2. تحقق من Bot Token و Chat ID في `main.py`
+3. تحقق من Webhook URL في TradingView
+
+## 📊 الملفات المهمة
+
+### `nixpacks.toml`
+```toml
+[phases.setup]
+nixPkgs = ['python311']
+
+[phases.install]
+cmds = ['pip install -r requirements.txt']
+
+[start]
+cmd = 'gunicorn main:app'
+```
+
+### `railway.json`
+```json
+{
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "gunicorn main:app"
+  }
+}
+```
+
+### `requirements.txt`
+```
+Flask==2.3.3
+requests==2.31.0
+gunicorn==21.2.0
+```
+
+## ✅ تم الإصلاح
+
+- ✅ حذف الملفات المتعارضة
+- ✅ تبسيط أوامر التشغيل
+- ✅ ضبط إعدادات Railway
+- ✅ إضافة `.gitignore`
+
+**🎉 الآن المشروع جاهز للنشر!**
+
