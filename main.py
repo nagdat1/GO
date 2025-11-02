@@ -158,6 +158,9 @@ def home():
             "/webhook": f"{app_url}/webhook - POST - Receive TradingView alerts",
             "/test": f"{app_url}/test - GET - Send test message to Telegram",
             "/welcome": f"{app_url}/welcome - GET - Send welcome message",
+            "/url": f"{app_url}/url - GET - Get webhook URL (sent to Telegram)",
+            "/link": f"{app_url}/link - GET - Get webhook URL (sent to Telegram)",
+            "/webhook-url": f"{app_url}/webhook-url - GET - Get webhook URL (sent to Telegram)",
             "/health": f"{app_url}/health - GET - Health check",
             "/": f"{app_url}/ - GET - This page"
         },
@@ -271,6 +274,59 @@ def health():
     return jsonify({
         "status": "healthy",
         "service": "TradingView to Telegram Bot"
+    }), 200
+
+
+@app.route('/url', methods=['GET'])
+@app.route('/link', methods=['GET'])
+@app.route('/webhook-url', methods=['GET'])
+def get_webhook_url():
+    """
+    الحصول على رابط Webhook الخاص بك
+    Get your webhook URL
+    """
+    app_url = get_app_url()
+    webhook_url = f"{app_url}/webhook"
+    
+    # إرسال الرابط في رسالة Telegram أيضاً
+    url_message = f"""
+🔗 *رابط Webhook الخاص بك* 🔗
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📡 *انسخ هذا الرابط وأضفه في TradingView:*
+
+`{webhook_url}`
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💡 *تعليمات:*
+1. افتح TradingView
+2. اذهب إلى Alerts → Create Alert
+3. فعّل Webhook URL
+4. انسخ الرابط أعلاه والصقه
+5. احفظ! ✅
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⏰ *الوقت:* {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+    """
+    
+    # إرسال الرسالة إلى Telegram
+    send_telegram_message(url_message)
+    
+    # إرجاع الرابط في JSON أيضاً
+    return jsonify({
+        "status": "success",
+        "webhook_url": webhook_url,
+        "message": "Webhook URL sent to Telegram",
+        "instructions": {
+            "step1": "Open TradingView",
+            "step2": "Go to Alerts → Create Alert",
+            "step3": "Enable Webhook URL",
+            "step4": f"Paste: {webhook_url}",
+            "step5": "Save"
+        }
     }), 200
 
 
