@@ -21,8 +21,12 @@ TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '8169000394')
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 # الحصول على رابط المشروع من متغيرات البيئة
-# Railway يوفر RAILWAY_PUBLIC_DOMAIN أو يمكن استخدام RAILWAY_STATIC_URL
-PROJECT_URL = os.environ.get('RAILWAY_PUBLIC_DOMAIN') or os.environ.get('RAILWAY_STATIC_URL') or os.environ.get('PROJECT_URL', '')
+# Railway يوفر RAILWAY_PUBLIC_DOMAIN أو RAILWAY_STATIC_URL تلقائياً
+# استخدام نفس الطريقة المستخدمة في المشروع المرجعي
+RAILWAY_URL = os.getenv('RAILWAY_PUBLIC_DOMAIN') or os.getenv('RAILWAY_STATIC_URL')
+PROJECT_URL = os.environ.get('PROJECT_URL', '') or RAILWAY_URL or ''
+
+# إضافة https إذا لم يكن موجوداً
 if PROJECT_URL and not PROJECT_URL.startswith('http'):
     PROJECT_URL = f"https://{PROJECT_URL}"
 
@@ -55,8 +59,8 @@ def send_telegram_message(message, parse_mode="Markdown"):
 
 def get_project_url():
     """
-    الحصول على رابط المشروع تلقائياً من مصادر مختلفة
-    Get project URL automatically from various sources
+    الحصول على رابط المشروع تلقائياً من Railway
+    Get project URL automatically from Railway (same method as reference project)
     """
     global _detected_project_url
     
@@ -64,39 +68,32 @@ def get_project_url():
     if _detected_project_url:
         return _detected_project_url
     
-    # 1. محاولة من متغيرات البيئة المباشرة
-    if PROJECT_URL:
-        _detected_project_url = PROJECT_URL
-        return PROJECT_URL
+    # استخدام نفس الطريقة المستخدمة في المشروع المرجعي
+    # Railway يوفر RAILWAY_PUBLIC_DOMAIN أو RAILWAY_STATIC_URL تلقائياً
+    railway_url = os.getenv('RAILWAY_PUBLIC_DOMAIN') or os.getenv('RAILWAY_STATIC_URL')
     
-    # 2. محاولة من Railway environment variables
-    railway_url = os.environ.get('RAILWAY_PUBLIC_DOMAIN') or os.environ.get('RAILWAY_STATIC_URL')
     if railway_url:
         if not railway_url.startswith('http'):
             railway_url = f"https://{railway_url}"
         _detected_project_url = railway_url
         return railway_url
     
-    # 3. محاولة من request headers (إذا كان متاحاً)
+    # إذا لم يتم العثور، جرب PROJECT_URL
+    if PROJECT_URL:
+        _detected_project_url = PROJECT_URL
+        return PROJECT_URL
+    
+    # محاولة من request headers كحل أخير
     try:
         from flask import has_request_context, request
         if has_request_context() and request and request.host:
             host = request.host
-            # التحقق من أن الرابط من Railway
             if 'railway.app' in host or 'railway.dev' in host:
                 detected_url = f"https://{host}"
                 _detected_project_url = detected_url
                 return detected_url
     except:
         pass
-    
-    # 4. محاولة من Railway service URL
-    service_url = os.environ.get('RAILWAY_SERVICE_URL')
-    if service_url:
-        if not service_url.startswith('http'):
-            service_url = f"https://{service_url}"
-        _detected_project_url = service_url
-        return service_url
     
     return None
 
@@ -119,7 +116,7 @@ def send_welcome_message():
     إرسال رسالة ترحيب عند بدء التطبيق
     Send welcome message when app starts
     """
-    # محاولة الحصول على الرابط تلقائياً
+    # محاولة الحصول على الرابط تلقائياً من Railway
     detected_url = get_project_url()
     
     if detected_url:
@@ -127,10 +124,16 @@ def send_welcome_message():
         url_note = ""
         print(f"✅ Project URL detected automatically: {detected_url}")
     else:
-        # إذا لم يتم العثور على الرابط، سيتم إعادة المحاولة عند أول طلب HTTP
-        webhook_url = f"https://detecting.../personal/{TELEGRAM_CHAT_ID}/webhook"
-        url_note = """
-        
+        # إذا لم يتم العثور على الرابط من Railway، استخدم PROJECT_URL أو انتظر
+        if PROJECT_URL:
+            webhook_url = f"{PROJECT_URL}/personal/{TELEGRAM_CHAT_ID}/webhook"
+            url_note = ""
+            detected_url = PROJECT_URL
+        else:
+            # لم يتم العثور على الرابط - سيتم المحاولة عند أول طلب
+            webhook_url = f"https://detecting.../personal/{TELEGRAM_CHAT_ID}/webhook"
+            url_note = """
+            
 ⏳ <b>جاري اكتشاف الرابط تلقائياً...</b>
 سيتم تحديث الرابط عند أول طلب HTTP."""
     
