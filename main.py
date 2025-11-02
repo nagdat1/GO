@@ -119,12 +119,18 @@ def get_project_url():
     الحصول على رابط المشروع من Railway أو من request
     Get project URL from Railway or from request
     """
-    # أولاً: محاولة من متغيرات البيئة
-    railway_url = os.getenv('RAILWAY_PUBLIC_DOMAIN') or os.getenv('RAILWAY_STATIC_URL')
+    # أولاً: محاولة من متغيرات البيئة (قراءة مباشرة في كل مرة)
+    railway_url = (
+        os.getenv('RAILWAY_PUBLIC_DOMAIN') or 
+        os.getenv('RAILWAY_STATIC_URL') or 
+        os.getenv('PUBLIC_URL') or
+        os.getenv('RENDER_EXTERNAL_URL')
+    )
     
     if railway_url:
         if not railway_url.startswith('http'):
             railway_url = f"https://{railway_url}"
+        print(f"✅ Found Railway URL from environment: {railway_url}")
         return railway_url
     
     # ثانياً: محاولة استخراج من request.host (إذا كان هناك request نشط)
@@ -136,15 +142,29 @@ def get_project_url():
             if ':' in host:
                 host = host.split(':')[0]
             # التحقق من أنه رابط عام (وليس localhost)
-            if 'localhost' not in host and '127.0.0.1' not in host:
-                detected_url = f"https://{request.host}"
-                print(f"✅ Detected public URL from request: {detected_url}")
-                return detected_url
+            if 'localhost' not in host and '127.0.0.1' not in host and '0.0.0.0' not in host:
+                # إذا كان يحتوي على railway.app، استخدمه مباشرة
+                if 'railway.app' in host:
+                    detected_url = f"https://{host}"
+                    print(f"✅ Detected Railway URL from request.host: {detected_url}")
+                    return detected_url
+                # إذا كان يحتوي على go-production، استخدمه مباشرة
+                elif 'go-production' in host:
+                    detected_url = f"https://{host}"
+                    print(f"✅ Detected URL from request.host: {detected_url}")
+                    return detected_url
     except Exception as e:
         pass
     
     # ثالثاً: استخدم PROJECT_URL إذا كان محفوظاً
-    return PROJECT_URL
+    if PROJECT_URL:
+        return PROJECT_URL
+    
+    # رابعاً: حل بديل - استخدام القيمة الثابتة إذا كانت معروفة
+    # (يمكن حذفها لاحقاً بعد إصلاح المتغير)
+    known_url = "https://go-production.up.railway.app"
+    print(f"⚠️ Using known URL as fallback: {known_url}")
+    return known_url
 
 
 def send_welcome_message_with_url(project_url=None):
