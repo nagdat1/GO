@@ -501,32 +501,38 @@ def initialize_bot():
 
 def send_welcome_on_startup():
     """
-    إرسال طلب HTTP ذاتي لتشغيل before_request وإرسال رسالة الترحيب
-    Send self HTTP request to trigger before_request and send welcome message
+    إرسال رسالة الترحيب عند بدء التطبيق
+    Send welcome message on application startup
     """
     global _welcome_sent
     try:
-        # انتظر 10 ثوانٍ لضمان أن gunicorn جاهز
-        print("⏳ Waiting 10 seconds for gunicorn to be ready...")
-        time.sleep(10)
+        # انتظر 3 ثوانٍ لضمان أن gunicorn جاهز
+        print("⏳ Waiting 3 seconds for gunicorn to be ready...")
+        time.sleep(3)
         
         if not _welcome_sent:
-            print("📨 Triggering self-request to detect Railway URL...")
-            # محاولة إرسال طلب HTTP للـ health endpoint لتشغيل before_request
-            try:
-                # الحصول على PORT من البيئة
-                port = os.getenv('PORT', '8080')
-                # إرسال طلب محلي
-                import requests
-                response = requests.get(f"http://localhost:{port}/health", timeout=5)
-                print(f"✅ Self-request sent, status: {response.status_code}")
-            except Exception as e:
-                print(f"⚠️ Self-request failed: {e}")
-                print("   Welcome message will be sent on first external HTTP request")
+            print("📨 Attempting to send welcome message...")
+            
+            # محاولة إرسال رسالة الترحيب مباشرة
+            project_url = get_project_url()
+            
+            if project_url:
+                print(f"✅ Railway URL found: {project_url}")
+                result = send_welcome_message_with_url(project_url)
+                if result:
+                    _welcome_sent = True
+                    print("✅ Welcome message sent successfully!")
+                else:
+                    print("❌ Failed to send welcome message")
+            else:
+                print("⚠️ Railway URL not detected yet")
+                print("   Will send welcome message on first HTTP request")
         else:
             print("✅ Welcome message already sent")
     except Exception as e:
         print(f"❌ Error in welcome thread: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 # بدء thread لإرسال رسالة الترحيب عند تحميل التطبيق
