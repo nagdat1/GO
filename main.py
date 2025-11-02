@@ -121,6 +121,8 @@ def home():
         "endpoints": {
             "/webhook": "POST - Receive TradingView alerts",
             "/test": "GET - Send test message to Telegram",
+            "/welcome": "GET - Send welcome message",
+            "/health": "GET - Health check",
             "/": "GET - This page"
         },
         "telegram_chat_id": TELEGRAM_CHAT_ID,
@@ -235,18 +237,120 @@ def health():
     }), 200
 
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
+def send_welcome_message():
+    """
+    إرسال رسالة ترحيب عند بدء البوت
+    Send welcome message when bot starts
+    """
+    welcome_message = """
+🎉 *مرحباً! البوت يعمل الآن* 🎉
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🤖 *حالة البوت:* ✅ نشط
+📊 *الخدمة:* TradingView → Telegram
+⏰ *وقت البدء:* {time}
+
+✅ *البوت جاهز لاستقبال التنبيهات من TradingView!*
+
+📡 *Webhook جاهز:* `/webhook`
+🧪 *للاختبار:* افتح `/test` endpoint
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💡 *تعليمات:*
+1. أضف رابط Webhook في TradingView Alert
+2. ضع الرابط: `https://your-app.railway.app/webhook`
+3. سيتم إرسال التنبيهات تلقائياً هنا! 🚀
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    """.format(time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    
+    try:
+        result = send_telegram_message(welcome_message)
+        if result and result.get('ok'):
+            print("✅ Welcome message sent successfully!")
+            return True
+        else:
+            print(f"⚠️ Warning: Could not send welcome message: {result}")
+            return False
+    except Exception as e:
+        print(f"⚠️ Warning: Error sending welcome message: {e}")
+        return False
+
+
+@app.route('/welcome', methods=['GET'])
+def welcome():
+    """
+    إرسال رسالة ترحيب - Send welcome message
+    """
+    send_welcome_message()
+    return jsonify({
+        "status": "success",
+        "message": "Welcome message sent!"
+    }), 200
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 🚀 بدء البوت - Bot Startup
+# ═══════════════════════════════════════════════════════════════════════════
+
+# دالة لإرسال رسالة ترحيب عند بدء البوت
+# Function to send welcome message when bot starts
+def on_startup():
+    """تشغيل عند بدء البوت"""
     print("=" * 60)
     print("🤖 TradingView to Telegram Bot")
     print("=" * 60)
     print(f"\n📱 Bot Token: {TELEGRAM_BOT_TOKEN[:10]}...")
     print(f"💬 Chat ID: {TELEGRAM_CHAT_ID}")
-    print(f"\n🌐 Server starting on port: {port}")
+    print(f"\n🌐 Server starting...")
     print(f"📡 Webhook URL: https://your-app.railway.app/webhook")
     print(f"\n✅ To test: https://your-app.railway.app/test")
     print("=" * 60)
     
+    # إرسال رسالة ترحيب
+    print("\n📨 Sending welcome message...")
+    send_welcome_message()
+
+
+# متغير لتتبع ما إذا تم إرسال رسالة الترحيب
+_welcome_sent = False
+
+@app.before_request
+def check_welcome():
+    """إرسال رسالة ترحيب عند أول طلب"""
+    global _welcome_sent
+    if not _welcome_sent:
+        _welcome_sent = True
+        # تشغيل في thread منفصل لتجنب تأخير الطلب
+        import threading
+        threading.Thread(target=on_startup, daemon=True).start()
+
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    
+    # إرسال رسالة ترحيب عند التشغيل المحلي
+    on_startup()
+    
+    print(f"\n🌐 Server starting on port: {port}")
+    print("=" * 60)
+    
     # Railway uses gunicorn, but keep this for local testing
     app.run(host='0.0.0.0', port=port, debug=False)
+else:
+    # عند التشغيل على Railway/Gunicorn
+    # When running on Railway/Gunicorn
+    import threading
+    import time
+    
+    def delayed_startup():
+        """بدء متأخر لضمان أن الخادم جاهز"""
+        time.sleep(3)  # انتظار 3 ثواني لضمان أن الخادم جاهز تماماً
+        on_startup()
+    
+    # تشغيل في thread منفصل
+    startup_thread = threading.Thread(target=delayed_startup, daemon=True)
+    startup_thread.start()
 
