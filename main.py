@@ -79,17 +79,225 @@ def format_trading_alert(data):
         if not message_text:
             message_text = str(data)
     
-    # إذا كانت الرسالة من المؤشر جاهزة ومنسقة بالفعل
-    # المؤشر "غروب الاشارات" يرسل رسائل جاهزة ومكتملة
-    if message_text and ('🟢🟢🟢' in message_text or '🔴🔴🔴' in message_text or 
-                        '🎯✅🎯' in message_text or '🛑😔🛑' in message_text or 
-                        '🔚📊🔚' in message_text or '*BUY SIGNAL*' in message_text or
-                        '*SELL SIGNAL*' in message_text or '*TP1 - FIRST TARGET HIT*' in message_text or
-                        '*TP2 - SECOND TARGET HIT*' in message_text or '*TP3 - THIRD TARGET HIT*' in message_text or
-                        '*STOP LOSS HIT*' in message_text or '*POSITION CLOSED*' in message_text):
-        # الرسالة من المؤشر جاهزة ومنسقة - نعيدها كما هي
-        # المؤشر يرسل الرسالة مباشرة عبر alert() في Pine Script
-        return message_text
+    # ═══════════════════════════════════════════════════════════════
+    # تحليل رسائل المؤشر "غروب الاشارات" وإعادة صياغتها بشكل احترافي
+    # ═══════════════════════════════════════════════════════════════
+    if message_text:
+        import re
+        
+        # التحقق من أن الرسالة من المؤشر
+        is_indicator_message = ('🟢🟢🟢' in message_text or '🔴🔴🔴' in message_text or 
+                               '🎯✅🎯' in message_text or '🛑😔🛑' in message_text or 
+                               '🔚📊🔚' in message_text or '*BUY SIGNAL*' in message_text or
+                               '*SELL SIGNAL*' in message_text or '*TP1 - FIRST TARGET HIT*' in message_text or
+                               '*TP2 - SECOND TARGET HIT*' in message_text or '*TP3 - THIRD TARGET HIT*' in message_text or
+                               '*STOP LOSS HIT*' in message_text or '*POSITION CLOSED*' in message_text)
+        
+        if is_indicator_message:
+            # استخراج المعلومات من رسالة المؤشر
+            formatted_msg = ""
+            
+            # 1. إشارة شراء (BUY SIGNAL)
+            if '*BUY SIGNAL*' in message_text or '🟢🟢🟢' in message_text:
+                # استخراج Symbol
+                symbol_match = re.search(r'Symbol:\s*([^\n]+)', message_text, re.IGNORECASE)
+                symbol = symbol_match.group(1).strip() if symbol_match else None
+                
+                # استخراج Entry Price
+                entry_match = re.search(r'Entry\s+Price:\s*([\d.,]+)', message_text, re.IGNORECASE)
+                entry_price = entry_match.group(1).strip() if entry_match else None
+                
+                # استخراج Time
+                time_match = re.search(r'Time:\s*([^\n]+)', message_text, re.IGNORECASE)
+                time_str = time_match.group(1).strip() if time_match else datetime.now().strftime('%Y-%m-%d %H:%M')
+                
+                # استخراج Timeframe
+                timeframe_match = re.search(r'Timeframe:\s*([^\n]+)', message_text, re.IGNORECASE)
+                timeframe = timeframe_match.group(1).strip() if timeframe_match else None
+                
+                # استخراج TP1, TP2, TP3
+                tp1_match = re.search(r'TP1:\s*([^\n]+)', message_text, re.IGNORECASE)
+                tp2_match = re.search(r'TP2:\s*([^\n]+)', message_text, re.IGNORECASE)
+                tp3_match = re.search(r'TP3:\s*([^\n]+)', message_text, re.IGNORECASE)
+                
+                tp1 = tp1_match.group(1).strip() if tp1_match else None
+                tp2 = tp2_match.group(1).strip() if tp2_match else None
+                tp3 = tp3_match.group(1).strip() if tp3_match else None
+                
+                # استخراج Stop Loss
+                sl_match = re.search(r'Stop\s+Loss:\s*([^\n]+)', message_text, re.IGNORECASE)
+                stop_loss = sl_match.group(1).strip() if sl_match else None
+                
+                # بناء الرسالة بشكل منظم
+                formatted_msg = "🟢 *إشارة شراء*\n"
+                formatted_msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                
+                if symbol:
+                    formatted_msg += f"💰 *العملة:* `{symbol}`\n"
+                if entry_price:
+                    formatted_msg += f"💵 *سعر الدخول:* `{entry_price}`\n"
+                
+                formatted_msg += "\n📍 *أهداف الربح:*\n"
+                if tp1:
+                    formatted_msg += f"   🎯 TP1: `{tp1}`\n"
+                if tp2:
+                    formatted_msg += f"   🎯 TP2: `{tp2}`\n"
+                if tp3:
+                    formatted_msg += f"   🎯 TP3: `{tp3}`\n"
+                
+                if stop_loss:
+                    formatted_msg += f"\n🛑 *وقف الخسارة:* `{stop_loss}`\n"
+                
+                if timeframe:
+                    formatted_msg += f"\n📈 *الإطار الزمني:* `{timeframe}`\n"
+                formatted_msg += f"⏰ *الوقت:* `{time_str}`\n"
+                formatted_msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                
+                return formatted_msg
+            
+            # 2. إشارة بيع (SELL SIGNAL)
+            elif '*SELL SIGNAL*' in message_text or '🔴🔴🔴' in message_text:
+                # استخراج المعلومات (نفس منطق الشراء)
+                symbol_match = re.search(r'Symbol:\s*([^\n]+)', message_text, re.IGNORECASE)
+                symbol = symbol_match.group(1).strip() if symbol_match else None
+                
+                entry_match = re.search(r'Entry\s+Price:\s*([\d.,]+)', message_text, re.IGNORECASE)
+                entry_price = entry_match.group(1).strip() if entry_match else None
+                
+                time_match = re.search(r'Time:\s*([^\n]+)', message_text, re.IGNORECASE)
+                time_str = time_match.group(1).strip() if time_match else datetime.now().strftime('%Y-%m-%d %H:%M')
+                
+                timeframe_match = re.search(r'Timeframe:\s*([^\n]+)', message_text, re.IGNORECASE)
+                timeframe = timeframe_match.group(1).strip() if timeframe_match else None
+                
+                tp1_match = re.search(r'TP1:\s*([^\n]+)', message_text, re.IGNORECASE)
+                tp2_match = re.search(r'TP2:\s*([^\n]+)', message_text, re.IGNORECASE)
+                tp3_match = re.search(r'TP3:\s*([^\n]+)', message_text, re.IGNORECASE)
+                
+                tp1 = tp1_match.group(1).strip() if tp1_match else None
+                tp2 = tp2_match.group(1).strip() if tp2_match else None
+                tp3 = tp3_match.group(1).strip() if tp3_match else None
+                
+                sl_match = re.search(r'Stop\s+Loss:\s*([^\n]+)', message_text, re.IGNORECASE)
+                stop_loss = sl_match.group(1).strip() if sl_match else None
+                
+                # بناء الرسالة
+                formatted_msg = "🔴 *إشارة بيع*\n"
+                formatted_msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                
+                if symbol:
+                    formatted_msg += f"💰 *العملة:* `{symbol}`\n"
+                if entry_price:
+                    formatted_msg += f"💵 *سعر الدخول:* `{entry_price}`\n"
+                
+                formatted_msg += "\n📍 *أهداف الربح:*\n"
+                if tp1:
+                    formatted_msg += f"   🎯 TP1: `{tp1}`\n"
+                if tp2:
+                    formatted_msg += f"   🎯 TP2: `{tp2}`\n"
+                if tp3:
+                    formatted_msg += f"   🎯 TP3: `{tp3}`\n"
+                
+                if stop_loss:
+                    formatted_msg += f"\n🛑 *وقف الخسارة:* `{stop_loss}`\n"
+                
+                if timeframe:
+                    formatted_msg += f"\n📈 *الإطار الزمني:* `{timeframe}`\n"
+                formatted_msg += f"⏰ *الوقت:* `{time_str}`\n"
+                formatted_msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                
+                return formatted_msg
+            
+            # 3. ضرب الهدف (TP1, TP2, TP3)
+            elif '*TP1 - FIRST TARGET HIT*' in message_text or '*TP2 - SECOND TARGET HIT*' in message_text or '*TP3 - THIRD TARGET HIT*' in message_text or ('🎯✅🎯' in message_text and 'TARGET HIT' in message_text.upper()):
+                tp_num = "1" if "TP1" in message_text or "FIRST" in message_text.upper() else \
+                         "2" if "TP2" in message_text or "SECOND" in message_text.upper() else \
+                         "3" if "TP3" in message_text or "THIRD" in message_text.upper() else "?"
+                
+                symbol_match = re.search(r'Symbol:\s*([^\n]+)', message_text, re.IGNORECASE)
+                symbol = symbol_match.group(1).strip() if symbol_match else None
+                
+                entry_match = re.search(r'Entry\s+Price:\s*([\d.,]+)', message_text, re.IGNORECASE)
+                entry_price = entry_match.group(1).strip() if entry_match else None
+                
+                exit_match = re.search(r'Exit\s+Price:\s*([\d.,]+)', message_text, re.IGNORECASE)
+                exit_price = exit_match.group(1).strip() if exit_match else None
+                
+                profit_match = re.search(r'Profit:\s*([^\n]+)', message_text, re.IGNORECASE)
+                profit = profit_match.group(1).strip() if profit_match else None
+                
+                time_match = re.search(r'Time:\s*([^\n]+)', message_text, re.IGNORECASE)
+                time_str = time_match.group(1).strip() if time_match else datetime.now().strftime('%Y-%m-%d %H:%M')
+                
+                # بناء الرسالة
+                formatted_msg = f"🎯✅ *تم ضرب الهدف {tp_num}*\n"
+                formatted_msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                
+                if symbol:
+                    formatted_msg += f"💰 *العملة:* `{symbol}`\n"
+                if entry_price:
+                    formatted_msg += f"💵 *سعر الدخول:* `{entry_price}`\n"
+                if exit_price:
+                    formatted_msg += f"💵 *سعر الهدف:* `{exit_price}`\n"
+                if profit:
+                    formatted_msg += f"💚 *الربح:* `{profit}`\n"
+                
+                formatted_msg += f"\n⏰ *الوقت:* `{time_str}`\n"
+                formatted_msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                
+                return formatted_msg
+            
+            # 4. ضرب وقف الخسارة (STOP LOSS)
+            elif '*STOP LOSS HIT*' in message_text or '🛑😔🛑' in message_text:
+                symbol_match = re.search(r'Symbol:\s*([^\n]+)', message_text, re.IGNORECASE)
+                symbol = symbol_match.group(1).strip() if symbol_match else None
+                
+                price_match = re.search(r'Price:\s*([\d.,]+)', message_text, re.IGNORECASE)
+                price = price_match.group(1).strip() if price_match else None
+                
+                time_match = re.search(r'Time:\s*([^\n]+)', message_text, re.IGNORECASE)
+                time_str = time_match.group(1).strip() if time_match else datetime.now().strftime('%Y-%m-%d %H:%M')
+                
+                # بناء الرسالة
+                formatted_msg = "🛑 *للأسف تم ضرب وقف الخسارة*\n"
+                formatted_msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                
+                if symbol:
+                    formatted_msg += f"💰 *العملة:* `{symbol}`\n"
+                if price:
+                    formatted_msg += f"💔 *سعر الإغلاق:* `{price}`\n"
+                
+                formatted_msg += f"\n⚠️ *يُنصح بمراجعة الاستراتيجية*\n"
+                formatted_msg += f"⏰ *الوقت:* `{time_str}`\n"
+                formatted_msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                
+                return formatted_msg
+            
+            # 5. إغلاق الصفقة (POSITION CLOSED)
+            elif '*POSITION CLOSED*' in message_text or '🔚📊🔚' in message_text:
+                symbol_match = re.search(r'Symbol:\s*([^\n]+)', message_text, re.IGNORECASE)
+                symbol = symbol_match.group(1).strip() if symbol_match else None
+                
+                price_match = re.search(r'Price:\s*([\d.,]+)', message_text, re.IGNORECASE)
+                price = price_match.group(1).strip() if price_match else None
+                
+                time_match = re.search(r'Time:\s*([^\n]+)', message_text, re.IGNORECASE)
+                time_str = time_match.group(1).strip() if time_match else datetime.now().strftime('%Y-%m-%d %H:%M')
+                
+                # بناء الرسالة
+                formatted_msg = "🔒 *إغلاق الصفقة*\n"
+                formatted_msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                
+                if symbol:
+                    formatted_msg += f"💰 *العملة:* `{symbol}`\n"
+                if price:
+                    formatted_msg += f"💵 *سعر الإغلاق:* `{price}`\n"
+                
+                formatted_msg += f"\n📌 *التعليمات:* أغلِق الصفقة الآن\n"
+                formatted_msg += f"⏰ *الوقت:* `{time_str}`\n"
+                formatted_msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                
+                return formatted_msg
     
     # تحليل الرسالة واستخراج المعلومات (للرسائل الأخرى غير المؤشر)
     if message_text:
@@ -103,6 +311,18 @@ def format_trading_alert(data):
         message_upper = cleaned_message.upper()
         
         # ═══════════════════════════════════════════════════════════════
+        # استخراج المعلومات الأساسية أولاً
+        # ═══════════════════════════════════════════════════════════════
+        
+        # استخراج المركز أولاً للتحقق من الإغلاق
+        position_match = re.search(r'المركز[^ه]*هو\s*(-?\d+\.?\d*)', cleaned_message) or re.search(r'position[^i]*is\s*(-?\d+\.?\d*)', cleaned_message, re.IGNORECASE)
+        position = position_match.group(1) if position_match else None
+        
+        # استخراج نوع الأمر (buy/sell) من "تم تنفيذ الأمر"
+        action_match = re.search(r'تم\s+تنفيذ\s+الأمر\s+(\w+)', cleaned_message, re.IGNORECASE) or re.search(r'order\s+(\w+)', cleaned_message, re.IGNORECASE)
+        action = action_match.group(1).lower() if action_match else None
+        
+        # ═══════════════════════════════════════════════════════════════
         # تحديد نوع الإشارة
         # ═══════════════════════════════════════════════════════════════
         
@@ -110,50 +330,63 @@ def format_trading_alert(data):
         signal_emoji = "📊"
         signal_title = "Trading Alert"
         
-        # 1. فتح صفقة BUY
-        if any(word in message_upper for word in ["BUY", "LONG", "شراء"]) and not any(word in message_upper for word in ["CLOSE", "إغلاق", "TP", "SL"]):
-            signal_category = "ENTRY_BUY"
-            signal_emoji = "🟢"
-            signal_title = "إشارة شراء"
+        # تحقق من الإغلاق أولاً (المركز = 0)
+        if position:
+            try:
+                position_float = float(position)
+                if position_float == 0:
+                    signal_category = "CLOSE"
+                    signal_emoji = "🔒"
+                    signal_title = "إغلاق صفقة"
+            except:
+                pass
         
-        # 2. فتح صفقة SELL
-        elif any(word in message_upper for word in ["SELL", "SHORT", "بيع"]) and not any(word in message_upper for word in ["CLOSE", "إغلاق", "TP", "SL"]):
-            signal_category = "ENTRY_SELL"
-            signal_emoji = "🔴"
-            signal_title = "إشارة بيع"
-        
-        # 3. إغلاق صفقة
-        elif any(word in message_upper for word in ["CLOSE", "إغلاق", "EXIT"]):
-            signal_category = "CLOSE"
-            signal_emoji = "🔒"
-            signal_title = "إغلاق صفقة"
+        # إذا لم يكن إغلاق، حدد نوع الصفقة
+        if not signal_category:
+            # 1. فتح صفقة BUY
+            if (action and action in ["buy", "long"]) or (any(word in message_upper for word in ["BUY", "LONG", "شراء"]) and not any(word in message_upper for word in ["CLOSE", "إغلاق", "TP", "SL"])):
+                signal_category = "ENTRY_BUY"
+                signal_emoji = "🟢"
+                signal_title = "إشارة شراء"
+            
+            # 2. فتح صفقة SELL
+            elif (action and action in ["sell", "short"]) or (any(word in message_upper for word in ["SELL", "SHORT", "بيع"]) and not any(word in message_upper for word in ["CLOSE", "إغلاق", "TP", "SL"])):
+                signal_category = "ENTRY_SELL"
+                signal_emoji = "🔴"
+                signal_title = "إشارة بيع"
+            
+            # 3. إغلاق صفقة (من الكلمات)
+            elif any(word in message_upper for word in ["CLOSE", "إغلاق", "EXIT"]):
+                signal_category = "CLOSE"
+                signal_emoji = "🔒"
+                signal_title = "إغلاق صفقة"
         
         # 4. هدف 1
-        elif any(word in message_upper for word in ["TP1", "TARGET 1", "TAKE PROFIT 1", "الهدف 1", "هدف 1"]):
+        if not signal_category and any(word in message_upper for word in ["TP1", "TARGET 1", "TAKE PROFIT 1", "الهدف 1", "هدف 1"]):
             signal_category = "TP1"
             signal_emoji = "🎯"
             signal_title = "تحقيق الهدف الأول"
         
         # 5. هدف 2
-        elif any(word in message_upper for word in ["TP2", "TARGET 2", "TAKE PROFIT 2", "الهدف 2", "هدف 2"]):
+        if not signal_category and any(word in message_upper for word in ["TP2", "TARGET 2", "TAKE PROFIT 2", "الهدف 2", "هدف 2"]):
             signal_category = "TP2"
             signal_emoji = "🎯🎯"
             signal_title = "تحقيق الهدف الثاني"
         
         # 6. هدف 3
-        elif any(word in message_upper for word in ["TP3", "TARGET 3", "TAKE PROFIT 3", "الهدف 3", "هدف 3"]):
+        if not signal_category and any(word in message_upper for word in ["TP3", "TARGET 3", "TAKE PROFIT 3", "الهدف 3", "هدف 3"]):
             signal_category = "TP3"
             signal_emoji = "🎯🎯🎯"
             signal_title = "تحقيق الهدف الثالث"
         
         # 7. وقف خسارة
-        elif any(word in message_upper for word in ["STOP LOSS", "SL", "STOPLOSS", "وقف الخسارة", "ستوب لوز"]):
+        if not signal_category and any(word in message_upper for word in ["STOP LOSS", "SL", "STOPLOSS", "وقف الخسارة", "ستوب لوز"]):
             signal_category = "STOP_LOSS"
             signal_emoji = "🛑"
             signal_title = "وقف الخسارة"
         
         # 8. هدف عام (TP بدون رقم)
-        elif any(word in message_upper for word in ["TP", "TAKE PROFIT", "TARGET", "هدف"]):
+        if not signal_category and any(word in message_upper for word in ["TP", "TAKE PROFIT", "TARGET", "هدف"]):
             signal_category = "TP"
             signal_emoji = "🎯"
             signal_title = "تحقيق هدف"
@@ -162,17 +395,30 @@ def format_trading_alert(data):
         # استخراج المعلومات
         # ═══════════════════════════════════════════════════════════════
         
-        # استخراج السعر
+        # استخراج السعر (من بعد @)
+        # ملاحظة: قد يكون ما بعد @ هو عدد العقود وليس السعر إذا كان صغيراً
         price_match = re.search(r'@\s*([\d.,]+)', cleaned_message)
-        price = price_match.group(1).replace(',', '') if price_match else None
+        price_raw = price_match.group(1).replace(',', '') if price_match else None
         
-        # استخراج العملة
-        ticker_match = re.search(r'على\s+([A-Z0-9]+)', cleaned_message) or re.search(r'([A-Z]+USDT|[A-Z]+BTC|[A-Z]+ETH|[A-Z]+BUSD)', cleaned_message.upper())
-        ticker = ticker_match.group(1) if ticker_match else None
+        # إذا كان "السعر" صغير جداً (< 100) ويساوي المركز، فهو على الأرجح عدد العقود وليس السعر
+        price = None
+        if price_raw:
+            try:
+                price_float = float(price_raw)
+                # إذا كان السعر أقل من 100 ويساوي المركز، فهو عدد العقود
+                if price_float >= 100 or (position and abs(price_float - float(position)) > 0.01):
+                    price = price_raw
+                # إذا كان صغيراً جداً (أقل من 1) فهو بالتأكيد ليس سعر عملة
+                elif price_float < 1:
+                    price = None
+                else:
+                    price = price_raw
+            except:
+                price = price_raw
         
-        # استخراج المركز
-        position_match = re.search(r'المركز[^ه]*هو\s*(-?\d+\.?\d*)', cleaned_message) or re.search(r'position[^i]*is\s*(-?\d+\.?\d*)', cleaned_message, re.IGNORECASE)
-        position = position_match.group(1) if position_match else None
+        # استخراج العملة (من "على SYMBOL" أو من نهاية الرسالة)
+        ticker_match = re.search(r'على\s+([A-Z0-9]+)', cleaned_message, re.IGNORECASE) or re.search(r'([A-Z]{2,}(?:USDT|BTC|ETH|BUSD|USD))', cleaned_message.upper())
+        ticker = ticker_match.group(1).upper() if ticker_match else None
         
         # استخراج الأهداف (TP1, TP2, TP3)
         tp1_match = re.search(r'TP1[:\s]*@?\s*([\d.,]+)', cleaned_message, re.IGNORECASE)
@@ -247,10 +493,10 @@ def format_trading_alert(data):
             formatted_msg += f"⚠️ *يُنصح بمراجعة الاستراتيجية*\n"
         
         # معلومات إضافية
-        if position is not None and signal_category not in ["TP1", "TP2", "TP3", "STOP_LOSS"]:
+        if position is not None and signal_category not in ["TP1", "TP2", "TP3", "STOP_LOSS", "CLOSE"]:
             try:
                 position_float = float(position)
-                if position_float == 0:
+                if abs(position_float) < 0.0001:  # إذا كان قريب من الصفر
                     formatted_msg += f"\n📊 *المركز:* لا يوجد\n"
                 else:
                     formatted_msg += f"\n📊 *حجم المركز:* `{position_float}`\n"
@@ -259,9 +505,9 @@ def format_trading_alert(data):
         
         # الوقت
         formatted_msg += f"\n⏰ *الوقت:* `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`\n"
-    formatted_msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    
-    return formatted_msg
+        formatted_msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        
+        return formatted_msg
     
     # إذا لم يتم تحليل الرسالة، أرسلها كما هي
     if message_text:
@@ -290,7 +536,7 @@ def personal_webhook(chat_id):
             "status": "error",
             "message": "Invalid chat ID"
         }), 403
-    
+
     if request.method == 'GET':
         return jsonify({
             "status": "online",
