@@ -192,13 +192,13 @@ def format_trading_alert(data):
         # ═══════════════════════════════════════════════════════════════
         
         formatted_msg = f"{signal_emoji} *{signal_title}*\n"
-    formatted_msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-    
+        formatted_msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        
         # معلومات أساسية
-    if ticker:
+        if ticker:
             formatted_msg += f"💰 *العملة:* `{ticker}`\n"
-    
-    if price:
+        
+        if price:
             try:
                 price_float = float(price)
                 formatted_price = f"{price_float:,.4f}".rstrip('0').rstrip('.')
@@ -304,17 +304,17 @@ def personal_webhook(chat_id):
         print(f"   URL: {request.url}")
         
         # استقبال البيانات
-            data = {}
-            content_type = request.headers.get('Content-Type', '').lower()
+        data = {}
+        content_type = request.headers.get('Content-Type', '').lower()
         
         if 'application/json' in content_type:
             data = request.get_json() or {}
-                        print(f"   ✅ Got JSON data: {data}")
+            print(f"   ✅ Got JSON data: {data}")
         else:
-                    form_data = dict(request.form)
-                    if form_data:
-                        data = form_data
-                        print(f"   ✅ Got form data: {data}")
+            form_data = dict(request.form)
+            if form_data:
+                data = form_data
+                print(f"   ✅ Got form data: {data}")
             else:
                 raw_data = request.get_data(as_text=True)
                 print(f"   📝 Raw data: {raw_data[:200] if raw_data else 'Empty'}")
@@ -327,29 +327,29 @@ def personal_webhook(chat_id):
                         print(f"   ✅ Using raw data as message")
         
         if not data:
-                data = {"message": "تنبيه ورد بدون بيانات"}
+            data = {"message": "تنبيه ورد بدون بيانات"}
             print(f"   ⚠️ No data found, using default")
-            
+        
         print(f"   📊 Final data: {data}")
-            
+        
         # تحويل البيانات إلى رسالة
-            message = format_trading_alert(data)
+        message = format_trading_alert(data)
         print(f"   📝 Formatted message length: {len(message)} chars")
-            
-            # إرسال الرسالة إلى Telegram
+        
+        # إرسال الرسالة إلى Telegram
         print(f"   📤 Sending to Telegram (Chat ID: {TELEGRAM_CHAT_ID})...")
         if send_telegram_message(message):
             print(f"   ✅ Alert sent successfully!")
-                return jsonify({
-                    "status": "success",
-                    "message": "Alert sent to Telegram successfully"
-                }), 200
-            else:
+            return jsonify({
+                "status": "success",
+                "message": "Alert sent to Telegram successfully"
+            }), 200
+        else:
             print(f"   ❌ Failed to send to Telegram")
-                return jsonify({
-                    "status": "error",
+            return jsonify({
+                "status": "error",
                 "message": "Failed to send to Telegram"
-                }), 500
+            }), 500
             
     except Exception as e:
         print(f"   ❌ Exception: {e}")
@@ -378,15 +378,15 @@ def test_alert():
     message = format_trading_alert(test_data)
     
     if send_telegram_message(message):
-            return jsonify({
-                "status": "success",
-                "message": "Test alert sent successfully!",
+        return jsonify({
+            "status": "success",
+            "message": "Test alert sent successfully!",
             "test_data": test_data,
             "formatted_message": message
-            }), 200
-        else:
-            return jsonify({
-                "status": "error",
+        }), 200
+    else:
+        return jsonify({
+            "status": "error",
             "message": "Failed to send test alert"
         }), 500
 
