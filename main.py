@@ -156,32 +156,29 @@ def format_trading_alert(data):
                 sl_match = re.search(r'Stop\s+Loss:\s*([^\n]+)', message_text, re.IGNORECASE)
                 stop_loss = sl_match.group(1).strip() if sl_match else None
                 
-                # بناء الرسالة بشكل منظم
-                formatted_msg = "🟢 *إشارة شراء*\n"
-                formatted_msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                # بناء الرسالة بشكل منظم - مطابق لملف التوثيق
+                formatted_msg = "🟢🟢🟢 *BUY SIGNAL* 🟢🟢🟢\n\n"
                 
                 if symbol:
-                    formatted_msg += f"💰 *العملة:* `{symbol}`\n"
+                    formatted_msg += f"📊 Symbol: {symbol}\n"
                 if entry_price:
-                    formatted_msg += f"💵 *سعر الدخول:* `{entry_price}`\n"
+                    formatted_msg += f"💰 Entry Price: {entry_price}\n"
+                formatted_msg += f"⏰ Time: {time_str}\n"
+                if timeframe:
+                    formatted_msg += f"📈 Timeframe: {timeframe}\n"
                 
                 # إظهار أهداف الربح فقط إذا كانت موجودة
                 if tp1 or tp2 or tp3:
-                    formatted_msg += "\n📍 *أهداف الربح:*\n"
+                    formatted_msg += "\n🎯 *Take Profit Targets:*\n"
                     if tp1:
-                        formatted_msg += f"   🎯 TP1: `{tp1}`\n"
+                        formatted_msg += f"🎯 TP1: {tp1}\n"
                     if tp2:
-                        formatted_msg += f"   🎯 TP2: `{tp2}`\n"
+                        formatted_msg += f"🎯 TP2: {tp2}\n"
                     if tp3:
-                        formatted_msg += f"   🎯 TP3: `{tp3}`\n"
+                        formatted_msg += f"🎯 TP3: {tp3}\n"
                 
                 if stop_loss:
-                    formatted_msg += f"\n🛑 *وقف الخسارة:* `{stop_loss}`\n"
-                
-                if timeframe:
-                    formatted_msg += f"\n📈 *الإطار الزمني:* `{timeframe}`\n"
-                formatted_msg += f"\n⏰ *الوقت:* `{time_str}`\n"
-                formatted_msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    formatted_msg += f"\n🛑 Stop Loss: {stop_loss}\n"
                 
                 return formatted_msg
             
@@ -206,7 +203,7 @@ def format_trading_alert(data):
                             # تحويل من ميلي ثانية إلى ثانية
                             if timestamp_ms > 1000000000000:  # إذا كان بالميلي ثانية
                                 timestamp_s = timestamp_ms / 1000
-                                else:
+                            else:
                                 timestamp_s = timestamp_ms
                             time_str = datetime.fromtimestamp(timestamp_s).strftime('%Y-%m-%d %H:%M')
                         # إذا كان تاريخ نصي
@@ -239,32 +236,29 @@ def format_trading_alert(data):
                 sl_match = re.search(r'Stop\s+Loss:\s*([^\n]+)', message_text, re.IGNORECASE)
                 stop_loss = sl_match.group(1).strip() if sl_match else None
                 
-                # بناء الرسالة
-                formatted_msg = "🔴 *إشارة بيع*\n"
-                formatted_msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                # بناء الرسالة - مطابق لملف التوثيق
+                formatted_msg = "🔴🔴🔴 *SELL SIGNAL* 🔴🔴🔴\n\n"
                 
                 if symbol:
-                    formatted_msg += f"💰 *العملة:* `{symbol}`\n"
+                    formatted_msg += f"📊 Symbol: {symbol}\n"
                 if entry_price:
-                    formatted_msg += f"💵 *سعر الدخول:* `{entry_price}`\n"
+                    formatted_msg += f"💰 Entry Price: {entry_price}\n"
+                formatted_msg += f"⏰ Time: {time_str}\n"
+                if timeframe:
+                    formatted_msg += f"📈 Timeframe: {timeframe}\n"
                 
                 # إظهار أهداف الربح فقط إذا كانت موجودة
                 if tp1 or tp2 or tp3:
-                    formatted_msg += "\n📍 *أهداف الربح:*\n"
+                    formatted_msg += "\n🎯 *Take Profit Targets:*\n"
                     if tp1:
-                        formatted_msg += f"   🎯 TP1: `{tp1}`\n"
+                        formatted_msg += f"🎯 TP1: {tp1}\n"
                     if tp2:
-                        formatted_msg += f"   🎯 TP2: `{tp2}`\n"
+                        formatted_msg += f"🎯 TP2: {tp2}\n"
                     if tp3:
-                        formatted_msg += f"   🎯 TP3: `{tp3}`\n"
+                        formatted_msg += f"🎯 TP3: {tp3}\n"
                 
                 if stop_loss:
-                    formatted_msg += f"\n🛑 *وقف الخسارة:* `{stop_loss}`\n"
-                
-                if timeframe:
-                    formatted_msg += f"\n📈 *الإطار الزمني:* `{timeframe}`\n"
-                formatted_msg += f"\n⏰ *الوقت:* `{time_str}`\n"
-                formatted_msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    formatted_msg += f"\n🛑 Stop Loss: {stop_loss}\n"
                 
                 return formatted_msg
             
@@ -312,24 +306,26 @@ def format_trading_alert(data):
                     except:
                         pass
                 
-                # بناء الرسالة
-                formatted_msg = f"🎯✅ *تم ضرب الهدف {tp_num}*\n"
-                formatted_msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                # بناء الرسالة - مطابق لملف التوثيق
+                tp_title = f"*TP{tp_num} - {'FIRST' if tp_num == '1' else 'SECOND' if tp_num == '2' else 'THIRD'} TARGET HIT!*"
+                formatted_msg = f"🎯✅🎯 {tp_title} 🎯✅🎯\n\n"
                 
                 if symbol:
-                    formatted_msg += f"💰 *العملة:* `{symbol}`\n"
+                    formatted_msg += f"📊 Symbol: {symbol}\n"
                 if entry_price:
-                    formatted_msg += f"💵 *سعر الدخول:* `{entry_price}`\n"
+                    formatted_msg += f"💰 Entry Price: {entry_price}\n"
                 if exit_price:
-                    formatted_msg += f"💵 *سعر الهدف:* `{exit_price}`\n"
+                    formatted_msg += f"💰 Exit Price: {exit_price}\n"
                 if profit:
-                    formatted_msg += f"💚 *الربح:* `{profit}`\n"
+                    formatted_msg += f"💵 Profit: {profit}\n"
+                formatted_msg += f"⏰ Time: {time_str}\n"
+                timeframe_match = re.search(r'Timeframe:\s*([^\n]+)', message_text, re.IGNORECASE)
+                if timeframe_match:
+                    timeframe = timeframe_match.group(1).strip()
+                    formatted_msg += f"📈 Timeframe: {timeframe}\n"
                 
-                formatted_msg += f"\n⏰ *الوقت:* `{time_str}`\n"
-    formatted_msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    
-    return formatted_msg
-
+                return formatted_msg
+            
             # 4. ضرب وقف الخسارة (STOP LOSS)
             elif '*STOP LOSS HIT*' in message_text or '🛑😔🛑' in message_text:
                 symbol_match = re.search(r'Symbol:\s*([^\n]+)', message_text, re.IGNORECASE)
@@ -364,18 +360,18 @@ def format_trading_alert(data):
                     except:
                         pass
                 
-                # بناء الرسالة
-                formatted_msg = "🛑 *للأسف تم ضرب وقف الخسارة*\n"
-                formatted_msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                # بناء الرسالة - مطابق لملف التوثيق
+                formatted_msg = "🛑😔🛑 *STOP LOSS HIT* 🛑😔🛑\n\n"
                 
                 if symbol:
-                    formatted_msg += f"💰 *العملة:* `{symbol}`\n"
+                    formatted_msg += f"📊 Symbol: {symbol}\n"
                 if price:
-                    formatted_msg += f"💔 *سعر الإغلاق:* `{price}`\n"
-                
-                formatted_msg += f"\n⚠️ *يُنصح بمراجعة الاستراتيجية*\n"
-                formatted_msg += f"⏰ *الوقت:* `{time_str}`\n"
-                formatted_msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    formatted_msg += f"💰 Price: {price}\n"
+                formatted_msg += f"⏰ Time: {time_str}\n"
+                timeframe_match = re.search(r'Timeframe:\s*([^\n]+)', message_text, re.IGNORECASE)
+                if timeframe_match:
+                    timeframe = timeframe_match.group(1).strip()
+                    formatted_msg += f"📈 Timeframe: {timeframe}\n"
                 
                 return formatted_msg
             
@@ -413,18 +409,18 @@ def format_trading_alert(data):
                     except:
                         pass
                 
-                # بناء الرسالة
-                formatted_msg = "🔒 *إغلاق الصفقة*\n"
-                formatted_msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                # بناء الرسالة - مطابق لملف التوثيق
+                formatted_msg = "🔚📊🔚 *POSITION CLOSED* 🔚📊🔚\n\n"
                 
                 if symbol:
-                    formatted_msg += f"💰 *العملة:* `{symbol}`\n"
+                    formatted_msg += f"📊 Symbol: {symbol}\n"
                 if price:
-                    formatted_msg += f"💵 *سعر الإغلاق:* `{price}`\n"
-                
-                formatted_msg += f"\n📌 *التعليمات:* أغلِق الصفقة الآن\n"
-                formatted_msg += f"⏰ *الوقت:* `{time_str}`\n"
-                formatted_msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    formatted_msg += f"💰 Price: {price}\n"
+                formatted_msg += f"⏰ Time: {time_str}\n"
+                timeframe_match = re.search(r'Timeframe:\s*([^\n]+)', message_text, re.IGNORECASE)
+                if timeframe_match:
+                    timeframe = timeframe_match.group(1).strip()
+                    formatted_msg += f"📈 Timeframe: {timeframe}\n"
                 
                 return formatted_msg
     
@@ -540,7 +536,7 @@ def format_trading_alert(data):
                 # إذا كان صغيراً جداً (أقل من 1) فهو بالتأكيد ليس سعر عملة
                 elif price_float < 1:
                     price = None
-    else:
+                else:
                     price = price_raw
             except:
                 price = price_raw
@@ -667,10 +663,10 @@ def personal_webhook(chat_id):
         }), 403
 
     if request.method == 'GET':
-    return jsonify({
+        return jsonify({
             "status": "online",
             "message": "Webhook is ready"
-    }), 200
+        }), 200
 
     try:
         print(f"📥 Webhook request received!")
@@ -715,10 +711,10 @@ def personal_webhook(chat_id):
         print(f"   📤 Sending to Telegram (Chat ID: {TELEGRAM_CHAT_ID})...")
         if send_telegram_message(message):
             print(f"   ✅ Alert sent successfully!")
-        return jsonify({
+            return jsonify({
                 "status": "success",
                 "message": "Alert sent to Telegram successfully"
-        }), 200
+            }), 200
         else:
             print(f"   ❌ Failed to send to Telegram")
             return jsonify({
@@ -759,7 +755,7 @@ def test_alert():
             "test_data": test_data,
             "formatted_message": message
         }), 200
-        else:
+    else:
         return jsonify({
             "status": "error",
             "message": "Failed to send test alert"
