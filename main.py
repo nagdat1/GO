@@ -179,11 +179,20 @@ def get_project_url():
     if PROJECT_URL:
         return PROJECT_URL
     
-    # رابعاً: حل بديل - استخدام القيمة الثابتة إذا كانت معروفة
-    # (يمكن حذفها لاحقاً بعد إصلاح المتغير)
-    known_url = "https://go-production.up.railway.app"
-    print(f"⚠️ Using known URL as fallback: {known_url}")
-    return known_url
+    # رابعاً: محاولة اكتشاف تلقائي من Railway metadata
+    try:
+        # Railway يوفر متغيرات خاصة في docker container
+        railway_instance_id = os.getenv('RAILWAY_REPLICA_ID')
+        if railway_instance_id:
+            print(f"📍 Detected Railway instance: {railway_instance_id}")
+    except Exception as e:
+        pass
+    
+    # خامساً: إذا لم يتم اكتشاف أي رابط، أعد None
+    print(f"⚠️ Could not detect Railway URL!")
+    print(f"⚠️ Please check Railway Dashboard → Settings → Domains")
+    print(f"⚠️ Add environment variable: RAILWAY_PUBLIC_DOMAIN or PUBLIC_URL")
+    return None
 
 
 def send_welcome_message_with_url(project_url=None):
@@ -392,10 +401,17 @@ def home():
             "/test": "GET - Send test message to Telegram",
             "/send-alert": "GET/POST - Send test alert to Telegram",
             "/send-welcome": "GET - Manually send welcome message",
+            "/debug": "GET - Complete debug information",
+            "/verify-webhook": "GET - Get webhook URL and verification",
             "/health": "GET - Health check",
             "/": "GET - This page"
         },
-        "instructions": "Add webhook URL to TradingView Alert webhook field"
+        "instructions": "Add webhook URL to TradingView Alert webhook field",
+        "quick_links": {
+            "debug": "/debug",
+            "verify": "/verify-webhook",
+            "test": "/test"
+        }
     }), 200
 
 
@@ -736,9 +752,6 @@ def verify_webhook():
     project_url = get_project_url()
     correct_webhook = f"{project_url}/personal/{TELEGRAM_CHAT_ID}/webhook" if project_url else "Not detected"
     
-    # بناء رابط متوقع
-    expected_webhook = f"https://go-production.up.railway.app/personal/{TELEGRAM_CHAT_ID}/webhook"
-    
     return jsonify({
         "status": "ok",
         "your_info": {
@@ -746,17 +759,12 @@ def verify_webhook():
             "bot_username": "@nagdat232_bot",
         },
         "project_info": {
-            "detected_url": project_url or "Not detected",
-            "expected_url": "https://go-production.up.railway.app"
+            "detected_url": project_url or "Not detected"
         },
-        "webhook_urls": {
-            "correct_webhook": correct_webhook,
-            "expected_webhook": expected_webhook,
-            "is_correct": correct_webhook == expected_webhook if project_url else False
-        },
-        "copy_this_url_for_tradingview": expected_webhook,
+        "webhook_url": correct_webhook,
+        "copy_this_url_for_tradingview": correct_webhook,
         "instructions": {
-            "step_1": f"Copy this URL: {expected_webhook}",
+            "step_1": f"Copy this URL: {correct_webhook}",
             "step_2": "Open TradingView and go to Alert settings",
             "step_3": "Paste the URL in the 'Webhook URL' field",
             "step_4": "Save and test by sending an alert"
@@ -821,6 +829,66 @@ def get_bot_info():
             "status": "error",
             "message": str(e)
         }), 500
+
+
+@app.route('/debug', methods=['GET'])
+def debug():
+    """
+    صفحة تصحيح شاملة لتشخيص المشاكل
+    Comprehensive debug page to diagnose issues
+    """
+    project_url = get_project_url()
+    webhook_url = f"{project_url}/personal/{TELEGRAM_CHAT_ID}/webhook" if project_url else None
+    
+    # اختبار Telegram
+    telegram_status = "unknown"
+    telegram_test_msg = None
+    try:
+        test_url = f"{TELEGRAM_API_URL}/getMe"
+        test_response = requests.get(test_url, timeout=5)
+        telegram_test = test_response.json()
+        if telegram_test.get('ok'):
+            telegram_status = "✅ Connected"
+            telegram_test_msg = telegram_test.get('result', {})
+        else:
+            telegram_status = f"❌ Error: {telegram_test.get('description', 'Unknown')}"
+    except Exception as e:
+        telegram_status = f"❌ Exception: {str(e)}"
+    
+    # تجميع جميع متغيرات Railway
+    all_env_vars = {}
+    for key, value in os.environ.items():
+        if 'RAILWAY' in key or 'TELEGRAM' in key or 'URL' in key or 'PUBLIC' in key:
+            # إخفاء القيم الحساسة جزئياً
+            if 'TOKEN' in key:
+                all_env_vars[key] = value[:20] + "..." if len(value) > 20 else "***"
+            else:
+                all_env_vars[key] = value
+    
+    return jsonify({
+        "status": "debug_info",
+        "project_info": {
+            "detected_url": project_url or "❌ Not detected",
+            "webhook_url": webhook_url or "❌ Cannot construct (no URL)",
+            "request_host": request.host if request else "N/A",
+            "request_url": request.url if request else "N/A"
+        },
+        "telegram_info": {
+            "bot_token_prefix": TELEGRAM_BOT_TOKEN[:20] + "..." if TELEGRAM_BOT_TOKEN else "NOT SET",
+            "chat_id": TELEGRAM_CHAT_ID,
+            "connection_status": telegram_status,
+            "bot_info": telegram_test_msg
+        },
+        "environment_variables": all_env_vars,
+        "instructions": {
+            "if_no_url": "1. Go to Railway Dashboard → Settings → Domains",
+            "add_env_var": "2. Add RAILWAY_PUBLIC_DOMAIN with your domain (without https://)",
+            "redeploy": "3. Redeploy the service",
+            "check_telegram": "4. Make sure you started a chat with the bot (send /start)",
+            "test_webhook": "5. Use the webhook_url above in TradingView"
+        },
+        "quick_fix": "Add this in Railway Variables: RAILWAY_PUBLIC_DOMAIN = your-domain.up.railway.app"
+    }), 200
 
 
 @app.route('/test-telegram', methods=['GET'])
