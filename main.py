@@ -39,9 +39,19 @@ def send_telegram_message(message, parse_mode="Markdown"):
         }
         response = requests.post(url, json=data, timeout=10)
         result = response.json()
-        return result.get('ok', False)
+        
+        if result.get('ok'):
+            print(f"   ✅ Telegram API: Message sent successfully")
+            return True
+        else:
+            error_code = result.get('error_code', 'N/A')
+            error_desc = result.get('description', 'Unknown error')
+            print(f"   ❌ Telegram API Error {error_code}: {error_desc}")
+            return False
     except Exception as e:
-        print(f"❌ Error sending message: {e}")
+        print(f"   ❌ Exception sending message: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -151,43 +161,63 @@ def personal_webhook(chat_id):
         }), 200
     
     try:
+        print(f"📥 Webhook request received!")
+        print(f"   Method: {request.method}")
+        print(f"   Content-Type: {request.headers.get('Content-Type', 'N/A')}")
+        print(f"   URL: {request.url}")
+        
         # استقبال البيانات
         data = {}
         content_type = request.headers.get('Content-Type', '').lower()
         
         if 'application/json' in content_type:
             data = request.get_json() or {}
+            print(f"   ✅ Got JSON data: {data}")
         else:
             form_data = dict(request.form)
             if form_data:
                 data = form_data
+                print(f"   ✅ Got form data: {data}")
             else:
                 raw_data = request.get_data(as_text=True)
+                print(f"   📝 Raw data: {raw_data[:200] if raw_data else 'Empty'}")
                 if raw_data:
                     try:
                         data = json.loads(raw_data)
+                        print(f"   ✅ Parsed JSON from raw: {data}")
                     except:
                         data = {"message": raw_data}
+                        print(f"   ✅ Using raw data as message")
         
         if not data:
             data = {"message": "تنبيه ورد بدون بيانات"}
+            print(f"   ⚠️ No data found, using default")
+        
+        print(f"   📊 Final data: {data}")
         
         # تحويل البيانات إلى رسالة
         message = format_trading_alert(data)
+        print(f"   📝 Formatted message length: {len(message)} chars")
         
         # إرسال الرسالة إلى Telegram
+        print(f"   📤 Sending to Telegram (Chat ID: {TELEGRAM_CHAT_ID})...")
         if send_telegram_message(message):
+            print(f"   ✅ Alert sent successfully!")
             return jsonify({
                 "status": "success",
                 "message": "Alert sent to Telegram successfully"
             }), 200
         else:
+            print(f"   ❌ Failed to send to Telegram")
             return jsonify({
                 "status": "error",
                 "message": "Failed to send to Telegram"
             }), 500
             
     except Exception as e:
+        print(f"   ❌ Exception: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             "status": "error",
             "message": str(e)
@@ -198,6 +228,29 @@ def personal_webhook(chat_id):
 def webhook():
     """استقبال التنبيهات (endpoint قديم للتوافق)"""
     return personal_webhook(TELEGRAM_CHAT_ID)
+
+
+@app.route('/test-alert', methods=['GET', 'POST'])
+def test_alert():
+    """اختبار إرسال إشارة"""
+    test_data = {
+        "message": "nagdat (Trailing, Open/Close, No Filtering, 7, 45, 10, 2, 10, 50, 30, 20, 10): تم تنفيذ الأمر sell @ 55178.449 على SCRUSDT. المركز الجديدة للإستراتيجية هو 0"
+    }
+    
+    # استخدام نفس منطق personal_webhook
+    message = format_trading_alert(test_data)
+    
+    if send_telegram_message(message):
+        return jsonify({
+            "status": "success",
+            "message": "Test alert sent successfully!",
+            "test_data": test_data
+        }), 200
+    else:
+        return jsonify({
+            "status": "error",
+            "message": "Failed to send test alert"
+        }), 500
 
 
 def send_welcome_message():
