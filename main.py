@@ -56,72 +56,196 @@ def send_telegram_message(message, parse_mode="Markdown"):
 
 
 def format_trading_alert(data):
-    """تحويل بيانات TradingView إلى رسالة منسقة"""
+    """
+    تحويل بيانات TradingView إلى رسالة منسقة - نسخة احترافية
+    يدعم: فتح صفقة، إغلاق، أهداف (TP1, TP2, TP3)، وقف خسارة
+    """
     import re
     
-    # إذا كانت البيانات نصاً بسيطاً
+    # استخراج النص من البيانات
     if isinstance(data, str):
         message_text = data
     elif not data:
         return f"🔔 *تنبيه ورد*\n\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     else:
-        # استخراج الرسالة المباشرة
         message_text = (data.get('message') or 
                        data.get('text') or 
                        data.get('msg') or 
-                       data.get('alert_message') or "")
+                       data.get('alert_message') or 
+                       data.get('signal') or
+                       data.get('alert') or "")
         
         if not message_text:
             message_text = str(data)
     
     # تحليل الرسالة واستخراج المعلومات
     if message_text:
-        # استخراج نوع الأمر (sell, buy, etc)
-        signal_type = "📊"
-        message_upper = message_text.upper()
+        import re
         
-        if "SELL" in message_upper or "بيع" in message_text:
-            signal_type = "🔴"
-        elif "BUY" in message_upper or "LONG" in message_upper or "شراء" in message_text:
-            signal_type = "🟢"
-        elif "TP" in message_upper or "TAKE PROFIT" in message_upper:
-            signal_type = "🎯"
-        elif "SL" in message_upper or "STOP LOSS" in message_upper:
-            signal_type = "🛑"
+        # تنظيف الرسالة من التفاصيل التقنية
+        cleaned_message = message_text
+        cleaned_message = re.sub(r'^[^:]*\([^)]+\):\s*', '', cleaned_message)
+        cleaned_message = re.sub(r'nagdat\s*\([^)]+\):\s*', '', cleaned_message, flags=re.IGNORECASE)
+        
+        message_upper = cleaned_message.upper()
+        
+        # ═══════════════════════════════════════════════════════════════
+        # تحديد نوع الإشارة
+        # ═══════════════════════════════════════════════════════════════
+        
+        signal_category = None
+        signal_emoji = "📊"
+        signal_title = "Trading Alert"
+        
+        # 1. فتح صفقة BUY
+        if any(word in message_upper for word in ["BUY", "LONG", "شراء"]) and not any(word in message_upper for word in ["CLOSE", "إغلاق", "TP", "SL"]):
+            signal_category = "ENTRY_BUY"
+            signal_emoji = "🟢"
+            signal_title = "إشارة شراء"
+        
+        # 2. فتح صفقة SELL
+        elif any(word in message_upper for word in ["SELL", "SHORT", "بيع"]) and not any(word in message_upper for word in ["CLOSE", "إغلاق", "TP", "SL"]):
+            signal_category = "ENTRY_SELL"
+            signal_emoji = "🔴"
+            signal_title = "إشارة بيع"
+        
+        # 3. إغلاق صفقة
+        elif any(word in message_upper for word in ["CLOSE", "إغلاق", "EXIT"]):
+            signal_category = "CLOSE"
+            signal_emoji = "🔒"
+            signal_title = "إغلاق صفقة"
+        
+        # 4. هدف 1
+        elif any(word in message_upper for word in ["TP1", "TARGET 1", "TAKE PROFIT 1", "الهدف 1", "هدف 1"]):
+            signal_category = "TP1"
+            signal_emoji = "🎯"
+            signal_title = "تحقيق الهدف الأول"
+        
+        # 5. هدف 2
+        elif any(word in message_upper for word in ["TP2", "TARGET 2", "TAKE PROFIT 2", "الهدف 2", "هدف 2"]):
+            signal_category = "TP2"
+            signal_emoji = "🎯🎯"
+            signal_title = "تحقيق الهدف الثاني"
+        
+        # 6. هدف 3
+        elif any(word in message_upper for word in ["TP3", "TARGET 3", "TAKE PROFIT 3", "الهدف 3", "هدف 3"]):
+            signal_category = "TP3"
+            signal_emoji = "🎯🎯🎯"
+            signal_title = "تحقيق الهدف الثالث"
+        
+        # 7. وقف خسارة
+        elif any(word in message_upper for word in ["STOP LOSS", "SL", "STOPLOSS", "وقف الخسارة", "ستوب لوز"]):
+            signal_category = "STOP_LOSS"
+            signal_emoji = "🛑"
+            signal_title = "وقف الخسارة"
+        
+        # 8. هدف عام (TP بدون رقم)
+        elif any(word in message_upper for word in ["TP", "TAKE PROFIT", "TARGET", "هدف"]):
+            signal_category = "TP"
+            signal_emoji = "🎯"
+            signal_title = "تحقيق هدف"
+        
+        # ═══════════════════════════════════════════════════════════════
+        # استخراج المعلومات
+        # ═══════════════════════════════════════════════════════════════
         
         # استخراج السعر
-        price_match = re.search(r'@\s*([\d.]+)', message_text)
-        price = price_match.group(1) if price_match else None
+        price_match = re.search(r'@\s*([\d.,]+)', cleaned_message)
+        price = price_match.group(1).replace(',', '') if price_match else None
         
-        # استخراج العملة/الرمز
-        ticker_match = re.search(r'على\s+([A-Z]+)', message_text) or re.search(r'@\s*[\d.]+\s+على\s+([A-Z]+)', message_text)
-        if not ticker_match:
-            ticker_match = re.search(r'([A-Z]+USDT|[A-Z]+BTC|[A-Z]+ETH)', message_text.upper())
+        # استخراج العملة
+        ticker_match = re.search(r'على\s+([A-Z0-9]+)', cleaned_message) or re.search(r'([A-Z]+USDT|[A-Z]+BTC|[A-Z]+ETH|[A-Z]+BUSD)', cleaned_message.upper())
         ticker = ticker_match.group(1) if ticker_match else None
         
         # استخراج المركز
-        position_match = re.search(r'المركز\s+.*?(\d+)', message_text) or re.search(r'position.*?(\d+)', message_text.upper())
+        position_match = re.search(r'المركز[^ه]*هو\s*(-?\d+\.?\d*)', cleaned_message) or re.search(r'position[^i]*is\s*(-?\d+\.?\d*)', cleaned_message, re.IGNORECASE)
         position = position_match.group(1) if position_match else None
         
-        # تنظيف الرسالة من التفاصيل التقنية للاستراتيجية
-        cleaned_message = message_text
-        # إزالة تفاصيل الاستراتيجية بين الأقواس
-        cleaned_message = re.sub(r'\([^)]+\):\s*', '', cleaned_message)
-        cleaned_message = re.sub(r'nagdat\s*\([^)]+\):\s*', '', cleaned_message, flags=re.IGNORECASE)
+        # استخراج الأهداف (TP1, TP2, TP3)
+        tp1_match = re.search(r'TP1[:\s]*@?\s*([\d.,]+)', cleaned_message, re.IGNORECASE)
+        tp2_match = re.search(r'TP2[:\s]*@?\s*([\d.,]+)', cleaned_message, re.IGNORECASE)
+        tp3_match = re.search(r'TP3[:\s]*@?\s*([\d.,]+)', cleaned_message, re.IGNORECASE)
         
-        # بناء الرسالة المنسقة
-        formatted_msg = f"{signal_type} *Trading Alert*\n"
+        tp1 = tp1_match.group(1).replace(',', '') if tp1_match else None
+        tp2 = tp2_match.group(1).replace(',', '') if tp2_match else None
+        tp3 = tp3_match.group(1).replace(',', '') if tp3_match else None
+        
+        # استخراج وقف الخسارة
+        sl_match = re.search(r'SL[:\s]*@?\s*([\d.,]+)', cleaned_message, re.IGNORECASE) or re.search(r'STOP\s*LOSS[:\s]*@?\s*([\d.,]+)', cleaned_message, re.IGNORECASE)
+        stop_loss = sl_match.group(1).replace(',', '') if sl_match else None
+        
+        # ═══════════════════════════════════════════════════════════════
+        # بناء الرسالة حسب نوع الإشارة
+        # ═══════════════════════════════════════════════════════════════
+        
+        formatted_msg = f"{signal_emoji} *{signal_title}*\n"
         formatted_msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         
+        # معلومات أساسية
         if ticker:
-            formatted_msg += f"💰 *Symbol:* `{ticker}`\n"
-        if price:
-            formatted_msg += f"💵 *Price:* `{price}`\n"
-        if position is not None:
-            formatted_msg += f"📊 *Position:* `{position}`\n"
+            formatted_msg += f"💰 *العملة:* `{ticker}`\n"
         
-        formatted_msg += f"\n📝 *Details:*\n`{cleaned_message.strip()}`\n"
-        formatted_msg += f"\n⏰ *Time:* `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`\n"
+        if price:
+            try:
+                price_float = float(price)
+                formatted_price = f"{price_float:,.4f}".rstrip('0').rstrip('.')
+                formatted_msg += f"💵 *السعر:* `{formatted_price}`\n"
+            except:
+                formatted_msg += f"💵 *السعر:* `{price}`\n"
+        
+        # رسائل مخصصة حسب نوع الإشارة
+        if signal_category == "ENTRY_BUY":
+            formatted_msg += f"\n🟢 *نوع الصفقة:* شراء (LONG)\n"
+            if tp1 or tp2 or tp3:
+                formatted_msg += f"\n📍 *الأهداف:*\n"
+                if tp1:
+                    formatted_msg += f"   🎯 TP1: `{tp1}`\n"
+                if tp2:
+                    formatted_msg += f"   🎯 TP2: `{tp2}`\n"
+                if tp3:
+                    formatted_msg += f"   🎯 TP3: `{tp3}`\n"
+            if stop_loss:
+                formatted_msg += f"\n🛑 *وقف الخسارة:* `{stop_loss}`\n"
+        
+        elif signal_category == "ENTRY_SELL":
+            formatted_msg += f"\n🔴 *نوع الصفقة:* بيع (SHORT)\n"
+            if tp1 or tp2 or tp3:
+                formatted_msg += f"\n📍 *الأهداف:*\n"
+                if tp1:
+                    formatted_msg += f"   🎯 TP1: `{tp1}`\n"
+                if tp2:
+                    formatted_msg += f"   🎯 TP2: `{tp2}`\n"
+                if tp3:
+                    formatted_msg += f"   🎯 TP3: `{tp3}`\n"
+            if stop_loss:
+                formatted_msg += f"\n🛑 *وقف الخسارة:* `{stop_loss}`\n"
+        
+        elif signal_category == "CLOSE":
+            formatted_msg += f"\n🔒 *تم إغلاق الصفقة*\n"
+            if position and float(position) == 0:
+                formatted_msg += f"✅ *المركز الحالي:* صفر (تم الإغلاق بالكامل)\n"
+        
+        elif signal_category in ["TP1", "TP2", "TP3"]:
+            tp_number = signal_category[-1]
+            formatted_msg += f"\n🎉 *تهانينا! تم تحقيق الهدف {tp_number}*\n"
+        
+        elif signal_category == "STOP_LOSS":
+            formatted_msg += f"\n🛑 *للأسف، تم ضرب وقف الخسارة*\n"
+            formatted_msg += f"⚠️ *يُنصح بمراجعة الاستراتيجية*\n"
+        
+        # معلومات إضافية
+        if position is not None and signal_category not in ["TP1", "TP2", "TP3", "STOP_LOSS"]:
+            try:
+                position_float = float(position)
+                if position_float == 0:
+                    formatted_msg += f"\n📊 *المركز:* لا يوجد\n"
+                else:
+                    formatted_msg += f"\n📊 *حجم المركز:* `{position_float}`\n"
+            except:
+                pass
+        
+        # الوقت
+        formatted_msg += f"\n⏰ *الوقت:* `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`\n"
         formatted_msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         
         return formatted_msg
@@ -234,7 +358,7 @@ def webhook():
 def test_alert():
     """اختبار إرسال إشارة"""
     test_data = {
-        "message": "nagdat (Trailing, Open/Close, No Filtering, 7, 45, 10, 2, 10, 50, 30, 20, 10): تم تنفيذ الأمر sell @ 55178.449 على SCRUSDT. المركز الجديدة للإستراتيجية هو 0"
+        "message": "nagdat (Trailing, Open/Close, No Filtering, 7, 45, 10, 2, 10, 50, 30, 20, 10): تم تنفيذ الأمر sell @ 55556.723 على SCRUSDT. المركز الجديدة للإستراتيجية هو -55556.723"
     }
     
     # استخدام نفس منطق personal_webhook
@@ -244,7 +368,8 @@ def test_alert():
         return jsonify({
             "status": "success",
             "message": "Test alert sent successfully!",
-            "test_data": test_data
+            "test_data": test_data,
+            "formatted_message": message
         }), 200
     else:
         return jsonify({
