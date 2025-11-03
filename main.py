@@ -107,9 +107,37 @@ def format_trading_alert(data):
                 entry_match = re.search(r'Entry\s+Price:\s*([\d.,]+)', message_text, re.IGNORECASE)
                 entry_price = entry_match.group(1).strip() if entry_match else None
                 
-                # استخراج Time
+                # استخراج Time وتحويله
                 time_match = re.search(r'Time:\s*([^\n]+)', message_text, re.IGNORECASE)
-                time_str = time_match.group(1).strip() if time_match else datetime.now().strftime('%Y-%m-%d %H:%M')
+                time_raw = time_match.group(1).strip() if time_match else None
+                time_str = datetime.now().strftime('%Y-%m-%d %H:%M')
+                
+                if time_raw:
+                    try:
+                        # إذا كان timestamp بالميلي ثانية
+                        if time_raw.isdigit() and len(time_raw) >= 10:
+                            timestamp_ms = int(time_raw)
+                            # تحويل من ميلي ثانية إلى ثانية
+                            if timestamp_ms > 1000000000000:  # إذا كان بالميلي ثانية
+                                timestamp_s = timestamp_ms / 1000
+                            else:
+                                timestamp_s = timestamp_ms
+                            time_str = datetime.fromtimestamp(timestamp_s).strftime('%Y-%m-%d %H:%M')
+                        # إذا كان تاريخ نصي
+                        else:
+                            # محاولة تحليل التاريخ
+                            time_str = time_raw
+                            # التحقق من أنه تاريخ صحيح وليس نص عادي
+                            if 'yyyy' not in time_raw.lower() and 'MM' not in time_raw:
+                                # محاولة تحليل تنسيقات تاريخ شائعة
+                                try:
+                                    # تنسيق: "2025-11-03 04:15:11" أو "2025-11-03 04:15"
+                                    if len(time_raw) >= 16 and '-' in time_raw:
+                                        time_str = time_raw[:16]  # أخذ أول 16 حرف (YYYY-MM-DD HH:MM)
+                                except:
+                                    pass
+                    except:
+                        pass
                 
                 # استخراج Timeframe
                 timeframe_match = re.search(r'Timeframe:\s*([^\n]+)', message_text, re.IGNORECASE)
@@ -137,20 +165,22 @@ def format_trading_alert(data):
                 if entry_price:
                     formatted_msg += f"💵 *سعر الدخول:* `{entry_price}`\n"
                 
-                formatted_msg += "\n📍 *أهداف الربح:*\n"
-                if tp1:
-                    formatted_msg += f"   🎯 TP1: `{tp1}`\n"
-                if tp2:
-                    formatted_msg += f"   🎯 TP2: `{tp2}`\n"
-                if tp3:
-                    formatted_msg += f"   🎯 TP3: `{tp3}`\n"
+                # إظهار أهداف الربح فقط إذا كانت موجودة
+                if tp1 or tp2 or tp3:
+                    formatted_msg += "\n📍 *أهداف الربح:*\n"
+                    if tp1:
+                        formatted_msg += f"   🎯 TP1: `{tp1}`\n"
+                    if tp2:
+                        formatted_msg += f"   🎯 TP2: `{tp2}`\n"
+                    if tp3:
+                        formatted_msg += f"   🎯 TP3: `{tp3}`\n"
                 
                 if stop_loss:
                     formatted_msg += f"\n🛑 *وقف الخسارة:* `{stop_loss}`\n"
                 
                 if timeframe:
                     formatted_msg += f"\n📈 *الإطار الزمني:* `{timeframe}`\n"
-                formatted_msg += f"⏰ *الوقت:* `{time_str}`\n"
+                formatted_msg += f"\n⏰ *الوقت:* `{time_str}`\n"
                 formatted_msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                 
                 return formatted_msg
@@ -165,7 +195,35 @@ def format_trading_alert(data):
                 entry_price = entry_match.group(1).strip() if entry_match else None
                 
                 time_match = re.search(r'Time:\s*([^\n]+)', message_text, re.IGNORECASE)
-                time_str = time_match.group(1).strip() if time_match else datetime.now().strftime('%Y-%m-%d %H:%M')
+                time_raw = time_match.group(1).strip() if time_match else None
+                time_str = datetime.now().strftime('%Y-%m-%d %H:%M')
+                
+                if time_raw:
+                    try:
+                        # إذا كان timestamp بالميلي ثانية
+                        if time_raw.isdigit() and len(time_raw) >= 10:
+                            timestamp_ms = int(time_raw)
+                            # تحويل من ميلي ثانية إلى ثانية
+                            if timestamp_ms > 1000000000000:  # إذا كان بالميلي ثانية
+                                timestamp_s = timestamp_ms / 1000
+                                else:
+                                timestamp_s = timestamp_ms
+                            time_str = datetime.fromtimestamp(timestamp_s).strftime('%Y-%m-%d %H:%M')
+                        # إذا كان تاريخ نصي
+                        else:
+                            # محاولة تحليل التاريخ
+                            time_str = time_raw
+                            # التحقق من أنه تاريخ صحيح وليس نص عادي
+                            if 'yyyy' not in time_raw.lower() and 'MM' not in time_raw:
+                                # محاولة تحليل تنسيقات تاريخ شائعة
+                                try:
+                                    # تنسيق: "2025-11-03 04:15:11" أو "2025-11-03 04:15"
+                                    if len(time_raw) >= 16 and '-' in time_raw:
+                                        time_str = time_raw[:16]  # أخذ أول 16 حرف (YYYY-MM-DD HH:MM)
+                                except:
+                                    pass
+                    except:
+                        pass
                 
                 timeframe_match = re.search(r'Timeframe:\s*([^\n]+)', message_text, re.IGNORECASE)
                 timeframe = timeframe_match.group(1).strip() if timeframe_match else None
@@ -190,20 +248,22 @@ def format_trading_alert(data):
                 if entry_price:
                     formatted_msg += f"💵 *سعر الدخول:* `{entry_price}`\n"
                 
-                formatted_msg += "\n📍 *أهداف الربح:*\n"
-                if tp1:
-                    formatted_msg += f"   🎯 TP1: `{tp1}`\n"
-                if tp2:
-                    formatted_msg += f"   🎯 TP2: `{tp2}`\n"
-                if tp3:
-                    formatted_msg += f"   🎯 TP3: `{tp3}`\n"
+                # إظهار أهداف الربح فقط إذا كانت موجودة
+                if tp1 or tp2 or tp3:
+                    formatted_msg += "\n📍 *أهداف الربح:*\n"
+                    if tp1:
+                        formatted_msg += f"   🎯 TP1: `{tp1}`\n"
+                    if tp2:
+                        formatted_msg += f"   🎯 TP2: `{tp2}`\n"
+                    if tp3:
+                        formatted_msg += f"   🎯 TP3: `{tp3}`\n"
                 
                 if stop_loss:
                     formatted_msg += f"\n🛑 *وقف الخسارة:* `{stop_loss}`\n"
                 
                 if timeframe:
                     formatted_msg += f"\n📈 *الإطار الزمني:* `{timeframe}`\n"
-                formatted_msg += f"⏰ *الوقت:* `{time_str}`\n"
+                formatted_msg += f"\n⏰ *الوقت:* `{time_str}`\n"
                 formatted_msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                 
                 return formatted_msg
@@ -227,7 +287,30 @@ def format_trading_alert(data):
                 profit = profit_match.group(1).strip() if profit_match else None
                 
                 time_match = re.search(r'Time:\s*([^\n]+)', message_text, re.IGNORECASE)
-                time_str = time_match.group(1).strip() if time_match else datetime.now().strftime('%Y-%m-%d %H:%M')
+                time_raw = time_match.group(1).strip() if time_match else None
+                time_str = datetime.now().strftime('%Y-%m-%d %H:%M')
+                
+                if time_raw:
+                    try:
+                        # إذا كان timestamp بالميلي ثانية
+                        if time_raw.isdigit() and len(time_raw) >= 10:
+                            timestamp_ms = int(time_raw)
+                            if timestamp_ms > 1000000000000:
+                                timestamp_s = timestamp_ms / 1000
+                            else:
+                                timestamp_s = timestamp_ms
+                            time_str = datetime.fromtimestamp(timestamp_s).strftime('%Y-%m-%d %H:%M')
+                        else:
+                            time_str = time_raw
+                            if 'yyyy' not in time_raw.lower() and 'MM' not in time_raw:
+                                try:
+                                    # تنسيق: "2025-11-03 04:15:11" أو "2025-11-03 04:15"
+                                    if len(time_raw) >= 16 and '-' in time_raw:
+                                        time_str = time_raw[:16]  # أخذ أول 16 حرف (YYYY-MM-DD HH:MM)
+                                except:
+                                    pass
+                    except:
+                        pass
                 
                 # بناء الرسالة
                 formatted_msg = f"🎯✅ *تم ضرب الهدف {tp_num}*\n"
@@ -243,10 +326,10 @@ def format_trading_alert(data):
                     formatted_msg += f"💚 *الربح:* `{profit}`\n"
                 
                 formatted_msg += f"\n⏰ *الوقت:* `{time_str}`\n"
-                formatted_msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                
-                return formatted_msg
-            
+    formatted_msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    return formatted_msg
+
             # 4. ضرب وقف الخسارة (STOP LOSS)
             elif '*STOP LOSS HIT*' in message_text or '🛑😔🛑' in message_text:
                 symbol_match = re.search(r'Symbol:\s*([^\n]+)', message_text, re.IGNORECASE)
@@ -256,7 +339,30 @@ def format_trading_alert(data):
                 price = price_match.group(1).strip() if price_match else None
                 
                 time_match = re.search(r'Time:\s*([^\n]+)', message_text, re.IGNORECASE)
-                time_str = time_match.group(1).strip() if time_match else datetime.now().strftime('%Y-%m-%d %H:%M')
+                time_raw = time_match.group(1).strip() if time_match else None
+                time_str = datetime.now().strftime('%Y-%m-%d %H:%M')
+                
+                if time_raw:
+                    try:
+                        # إذا كان timestamp بالميلي ثانية
+                        if time_raw.isdigit() and len(time_raw) >= 10:
+                            timestamp_ms = int(time_raw)
+                            if timestamp_ms > 1000000000000:
+                                timestamp_s = timestamp_ms / 1000
+                            else:
+                                timestamp_s = timestamp_ms
+                            time_str = datetime.fromtimestamp(timestamp_s).strftime('%Y-%m-%d %H:%M')
+                        else:
+                            time_str = time_raw
+                            if 'yyyy' not in time_raw.lower() and 'MM' not in time_raw:
+                                try:
+                                    # تنسيق: "2025-11-03 04:15:11" أو "2025-11-03 04:15"
+                                    if len(time_raw) >= 16 and '-' in time_raw:
+                                        time_str = time_raw[:16]  # أخذ أول 16 حرف (YYYY-MM-DD HH:MM)
+                                except:
+                                    pass
+                    except:
+                        pass
                 
                 # بناء الرسالة
                 formatted_msg = "🛑 *للأسف تم ضرب وقف الخسارة*\n"
@@ -282,7 +388,30 @@ def format_trading_alert(data):
                 price = price_match.group(1).strip() if price_match else None
                 
                 time_match = re.search(r'Time:\s*([^\n]+)', message_text, re.IGNORECASE)
-                time_str = time_match.group(1).strip() if time_match else datetime.now().strftime('%Y-%m-%d %H:%M')
+                time_raw = time_match.group(1).strip() if time_match else None
+                time_str = datetime.now().strftime('%Y-%m-%d %H:%M')
+                
+                if time_raw:
+                    try:
+                        # إذا كان timestamp بالميلي ثانية
+                        if time_raw.isdigit() and len(time_raw) >= 10:
+                            timestamp_ms = int(time_raw)
+                            if timestamp_ms > 1000000000000:
+                                timestamp_s = timestamp_ms / 1000
+                            else:
+                                timestamp_s = timestamp_ms
+                            time_str = datetime.fromtimestamp(timestamp_s).strftime('%Y-%m-%d %H:%M')
+                        else:
+                            time_str = time_raw
+                            if 'yyyy' not in time_raw.lower() and 'MM' not in time_raw:
+                                try:
+                                    # تنسيق: "2025-11-03 04:15:11" أو "2025-11-03 04:15"
+                                    if len(time_raw) >= 16 and '-' in time_raw:
+                                        time_str = time_raw[:16]  # أخذ أول 16 حرف (YYYY-MM-DD HH:MM)
+                                except:
+                                    pass
+                    except:
+                        pass
                 
                 # بناء الرسالة
                 formatted_msg = "🔒 *إغلاق الصفقة*\n"
@@ -411,7 +540,7 @@ def format_trading_alert(data):
                 # إذا كان صغيراً جداً (أقل من 1) فهو بالتأكيد ليس سعر عملة
                 elif price_float < 1:
                     price = None
-                else:
+    else:
                     price = price_raw
             except:
                 price = price_raw
@@ -538,11 +667,11 @@ def personal_webhook(chat_id):
         }), 403
 
     if request.method == 'GET':
-        return jsonify({
+    return jsonify({
             "status": "online",
             "message": "Webhook is ready"
-        }), 200
-    
+    }), 200
+
     try:
         print(f"📥 Webhook request received!")
         print(f"   Method: {request.method}")
@@ -586,10 +715,10 @@ def personal_webhook(chat_id):
         print(f"   📤 Sending to Telegram (Chat ID: {TELEGRAM_CHAT_ID})...")
         if send_telegram_message(message):
             print(f"   ✅ Alert sent successfully!")
-            return jsonify({
+        return jsonify({
                 "status": "success",
                 "message": "Alert sent to Telegram successfully"
-            }), 200
+        }), 200
         else:
             print(f"   ❌ Failed to send to Telegram")
             return jsonify({
@@ -630,7 +759,7 @@ def test_alert():
             "test_data": test_data,
             "formatted_message": message
         }), 200
-    else:
+        else:
         return jsonify({
             "status": "error",
             "message": "Failed to send test alert"
