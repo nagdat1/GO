@@ -47,68 +47,80 @@ def send_telegram_message(message, parse_mode="Markdown"):
 
 def format_trading_alert(data):
     """تحويل بيانات TradingView إلى رسالة منسقة"""
+    import re
+    
     # إذا كانت البيانات نصاً بسيطاً
     if isinstance(data, str):
-        return f"🔔 *تنبيه*\n\n{data}\n\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-    
-    # إذا كانت البيانات فارغة
-    if not data:
+        message_text = data
+    elif not data:
         return f"🔔 *تنبيه ورد*\n\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    else:
+        # استخراج الرسالة المباشرة
+        message_text = (data.get('message') or 
+                       data.get('text') or 
+                       data.get('msg') or 
+                       data.get('alert_message') or "")
+        
+        if not message_text:
+            message_text = str(data)
     
-    # استخراج الرسالة المباشرة
-    message = (data.get('message') or 
-               data.get('text') or 
-               data.get('msg') or 
-               data.get('alert_message') or "")
+    # تحليل الرسالة واستخراج المعلومات
+    if message_text:
+        # استخراج نوع الأمر (sell, buy, etc)
+        signal_type = "📊"
+        message_upper = message_text.upper()
+        
+        if "SELL" in message_upper or "بيع" in message_text:
+            signal_type = "🔴"
+        elif "BUY" in message_upper or "LONG" in message_upper or "شراء" in message_text:
+            signal_type = "🟢"
+        elif "TP" in message_upper or "TAKE PROFIT" in message_upper:
+            signal_type = "🎯"
+        elif "SL" in message_upper or "STOP LOSS" in message_upper:
+            signal_type = "🛑"
+        
+        # استخراج السعر
+        price_match = re.search(r'@\s*([\d.]+)', message_text)
+        price = price_match.group(1) if price_match else None
+        
+        # استخراج العملة/الرمز
+        ticker_match = re.search(r'على\s+([A-Z]+)', message_text) or re.search(r'@\s*[\d.]+\s+على\s+([A-Z]+)', message_text)
+        if not ticker_match:
+            ticker_match = re.search(r'([A-Z]+USDT|[A-Z]+BTC|[A-Z]+ETH)', message_text.upper())
+        ticker = ticker_match.group(1) if ticker_match else None
+        
+        # استخراج المركز
+        position_match = re.search(r'المركز\s+.*?(\d+)', message_text) or re.search(r'position.*?(\d+)', message_text.upper())
+        position = position_match.group(1) if position_match else None
+        
+        # تنظيف الرسالة من التفاصيل التقنية للاستراتيجية
+        cleaned_message = message_text
+        # إزالة تفاصيل الاستراتيجية بين الأقواس
+        cleaned_message = re.sub(r'\([^)]+\):\s*', '', cleaned_message)
+        cleaned_message = re.sub(r'nagdat\s*\([^)]+\):\s*', '', cleaned_message, flags=re.IGNORECASE)
+        
+        # بناء الرسالة المنسقة
+        formatted_msg = f"{signal_type} *Trading Alert*\n"
+        formatted_msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        
+        if ticker:
+            formatted_msg += f"💰 *Symbol:* `{ticker}`\n"
+        if price:
+            formatted_msg += f"💵 *Price:* `{price}`\n"
+        if position is not None:
+            formatted_msg += f"📊 *Position:* `{position}`\n"
+        
+        formatted_msg += f"\n📝 *Details:*\n`{cleaned_message.strip()}`\n"
+        formatted_msg += f"\n⏰ *Time:* `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`\n"
+        formatted_msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        
+        return formatted_msg
     
-    if message and message.strip():
-        return f"🔔 *تنبيه*\n\n{message}\n\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-    
-    # استخراج المعلومات من البيانات
-    ticker = (data.get('ticker') or 
-              data.get('symbol') or 
-              data.get('{{ticker}}') or "")
-    
-    price = (data.get('close') or 
-             data.get('price') or 
-             data.get('{{close}}') or "")
-    
-    comment = (data.get('comment') or 
-               data.get('strategy.order.comment') or 
-               data.get('{{strategy.order.comment}}') or "")
-    
-    timeframe = (data.get('{{timeframe}}') or 
-                 data.get('timeframe') or "")
-    
-    # تحديد نوع الإشارة
-    signal_type = "📊"
-    comment_upper = str(comment).upper()
-    if any(word in comment_upper for word in ["BUY", "LONG", "شراء"]):
-        signal_type = "🟢"
-    elif any(word in comment_upper for word in ["SELL", "SHORT", "بيع"]):
-        signal_type = "🔴"
-    elif any(word in comment_upper for word in ["TP", "TAKE PROFIT", "جني ربح"]):
-        signal_type = "🎯"
-    elif any(word in comment_upper for word in ["SL", "STOP LOSS", "وقف خسارة"]):
-        signal_type = "🛑"
-    
-    # بناء الرسالة
-    formatted_msg = f"{signal_type} *Trading Alert*\n"
-    formatted_msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-    
-    if ticker:
-        formatted_msg += f"💰 *Symbol:* `{ticker}`\n"
-    if price:
-        formatted_msg += f"💵 *Price:* `{price}`\n"
-    if timeframe:
-        formatted_msg += f"📈 *Timeframe:* `{timeframe}`\n"
-    if comment:
-        formatted_msg += f"📝 *Comment:*\n`{comment}`\n"
-    
-    formatted_msg += f"\n⏰ *Time:* `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`\n"
-    formatted_msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    
-    return formatted_msg
+    # إذا لم يتم تحليل الرسالة، أرسلها كما هي
+    if message_text:
+        return f"🔔 *تنبيه*\n\n{message_text}\n\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    else:
+        return f"🔔 *تنبيه ورد*\n\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
 
 
 @app.route('/', methods=['GET'])
