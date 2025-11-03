@@ -125,9 +125,36 @@ def format_trading_alert(data):
                     symbol_match = re.search(r'Symbol:\s*([^\n]+)', message_text, re.IGNORECASE)
                     symbol = symbol_match.group(1).strip() if symbol_match else None
                 
-                # استخراج Entry Price بدقة - أولوية للبيانات من TradingView
+                # استخراج Entry Price بدقة - أولوية 1: من رسالة المؤشر مباشرة
                 entry_price = None
-                if tv_close:
+                
+                # أولوية كاملة لرسالة المؤشر - نبحث في الرسالة أولاً
+                entry_patterns = [
+                    r'💰\s*Entry\s+Price:\s*([\d.,]+)',
+                    r'Entry\s+Price:\s*([\d.,]+)'
+                ]
+                for pattern in entry_patterns:
+                    entry_match = re.search(pattern, message_text, re.IGNORECASE)
+                    if entry_match:
+                        price_raw = entry_match.group(1).strip().replace(',', '')
+                        try:
+                            price_val = float(price_raw)
+                            if price_val >= 1:
+                                entry_price = f"{price_val:,.4f}".rstrip('0').rstrip('.')
+                            else:
+                                entry_price = f"{price_val:,.8f}".rstrip('0').rstrip('.')
+                            break
+                        except:
+                            continue
+                
+                # إذا لم نجد في الرسالة، نستخدم النص كما هو
+                if not entry_price:
+                    entry_match = re.search(r'Entry\s+Price:\s*([^\n]+)', message_text, re.IGNORECASE)
+                    if entry_match:
+                        entry_price = entry_match.group(1).strip()
+                
+                # احتياطي: البيانات من TradingView فقط إذا لم نجد في الرسالة
+                if not entry_price and tv_close:
                     try:
                         price_val = float(tv_close)
                         if price_val >= 1:
@@ -136,32 +163,6 @@ def format_trading_alert(data):
                             entry_price = f"{price_val:,.8f}".rstrip('0').rstrip('.')
                     except:
                         pass
-                
-                if not entry_price:
-                    # البحث الدقيق في الرسالة
-                    entry_patterns = [
-                        r'💰\s*Entry\s+Price:\s*([\d.,]+)',
-                        r'Entry\s+Price:\s*([\d.,]+)'
-                    ]
-                    for pattern in entry_patterns:
-                        entry_match = re.search(pattern, message_text, re.IGNORECASE)
-                        if entry_match:
-                            price_raw = entry_match.group(1).strip().replace(',', '')
-                            try:
-                                price_val = float(price_raw)
-                                if price_val >= 1:
-                                    entry_price = f"{price_val:,.4f}".rstrip('0').rstrip('.')
-                                else:
-                                    entry_price = f"{price_val:,.8f}".rstrip('0').rstrip('.')
-                                break
-                            except:
-                                continue
-                    
-                    # إذا لم نجد بصيغة منظمة، نستخدم النص كما هو
-                    if not entry_price:
-                        entry_match = re.search(r'Entry\s+Price:\s*([^\n]+)', message_text, re.IGNORECASE)
-                        if entry_match:
-                            entry_price = entry_match.group(1).strip()
                 
                 # استخراج Time وتحويله - أولوية للبيانات من TradingView
                 time_str = datetime.now().strftime('%Y-%m-%d %H:%M')
@@ -571,9 +572,35 @@ def format_trading_alert(data):
         # ═══════════════════════════════════════════════════════════════
         
         # استخراج السعر بدقة من رسائل التنبيه
-        # أولوية 1: البيانات من TradingView (close)
+        # أولوية 1: استخراج من نص رسالة المؤشر مباشرة (الأولوية الكاملة)
         price = None
-        if isinstance(data, dict):
+        if message_text:
+            # البحث عن "💰 Entry Price: 123.45" أو "💰 Price: 123.45" أو "💰 Exit Price: 123.45"
+            price_patterns = [
+                r'💰\s*Entry\s+Price:\s*([\d.,]+)',  # Entry Price في BUY/SELL SIGNAL
+                r'💰\s*Price:\s*([\d.,]+)',          # Price في POSITION CLOSED و STOP LOSS
+                r'💰\s*Exit\s+Price:\s*([\d.,]+)',   # Exit Price في TP
+                r'Entry\s+Price:\s*([\d.,]+)',       # بدون emoji
+                r'Price:\s*([\d.,]+)',               # بدون emoji
+                r'Exit\s+Price:\s*([\d.,]+)'         # بدون emoji
+            ]
+            
+            for pattern in price_patterns:
+                price_match = re.search(pattern, message_text, re.IGNORECASE)
+                if price_match:
+                    price_raw = price_match.group(1).strip().replace(',', '')
+                    try:
+                        price_float = float(price_raw)
+                        if price_float >= 1:
+                            price = f"{price_float:,.4f}".rstrip('0').rstrip('.')
+                        else:
+                            price = f"{price_float:,.8f}".rstrip('0').rstrip('.')
+                        break  # وجدنا السعر من رسالة المؤشر، نتوقف
+                    except:
+                        continue
+        
+        # أولوية 2: احتياطي - البيانات من TradingView (فقط إذا لم نجد في رسالة المؤشر)
+        if not price and isinstance(data, dict):
             raw_price = (data.get('close') or data.get('price') or data.get('Close') or 
                         data.get('Price') or data.get('{{close}}') or data.get('close_price'))
             
@@ -610,11 +637,26 @@ def format_trading_alert(data):
                             price = f"{price_float:,.4f}".rstrip('0').rstrip('.')
                         else:
                             price = f"{price_float:.8f}".rstrip('0').rstrip('.')
-                        break  # وجدنا السعر، نتوقف
+                        break  # وجدنا السعر من رسالة المؤشر، نتوقف
                     except:
                         continue
         
-        # أولوية 3: استخراج من cleaned_message (للرسائل من Strategy)
+        # أولوية 2: احتياطي - البيانات من TradingView (فقط إذا لم نجد في رسالة المؤشر)
+        if not price and isinstance(data, dict):
+            raw_price = (data.get('close') or data.get('price') or data.get('Close') or 
+                        data.get('Price') or data.get('{{close}}') or data.get('close_price'))
+            
+            if raw_price:
+                try:
+                    price_float = float(raw_price)
+                    if price_float >= 1:
+                        price = f"{price_float:,.4f}".rstrip('0').rstrip('.')
+                    else:
+                        price = f"{price_float:,.8f}".rstrip('0').rstrip('.')
+                except:
+                    price = None
+        
+        # أولوية 3: استخراج من cleaned_message (للرسائل من Strategy - فقط إذا لم نجد في رسالة المؤشر)
         if not price:
             # استخراج السعر من بعد @ (للرسائل من Strategy)
             price_match = re.search(r'@\s*([\d.,]+)', cleaned_message)
@@ -654,11 +696,11 @@ def format_trading_alert(data):
                                 else:
                                     price = f"{price_float:.8f}".rstrip('0').rstrip('.')
                     else:
-                        # في حالات أخرى، نفس المنطق السابق
-                        if price_float >= 100 or (position and abs(price_float - float(position)) > 0.01):
-                            price = price_raw
-                        elif price_float >= 0.01 and price_float < 1:
-                            price = price_raw
+                        # في حالات ENTRY_BUY و ENTRY_SELL
+                        # ⚠️ مهم: ما بعد @ في رسائل Strategy هو حجم المركز وليس السعر!
+                        # لذلك نتجاهل ما بعد @ تماماً في حالة ENTRY
+                        # السعر الحقيقي يجب أن يأتي من {{close}} في البيانات أو لا نعرضه
+                        price = None  # نتجاهل ما بعد @ لأنه حجم مركز وليس السعر
                 except:
                     pass
         
@@ -666,18 +708,56 @@ def format_trading_alert(data):
         ticker_match = re.search(r'على\s+([A-Z0-9]+)', cleaned_message, re.IGNORECASE) or re.search(r'([A-Z]{2,}(?:USDT|BTC|ETH|BUSD|USD))', cleaned_message.upper())
         ticker = ticker_match.group(1).upper() if ticker_match else None
         
-        # استخراج الأهداف (TP1, TP2, TP3)
-        tp1_match = re.search(r'TP1[:\s]*@?\s*([\d.,]+)', cleaned_message, re.IGNORECASE)
-        tp2_match = re.search(r'TP2[:\s]*@?\s*([\d.,]+)', cleaned_message, re.IGNORECASE)
-        tp3_match = re.search(r'TP3[:\s]*@?\s*([\d.,]+)', cleaned_message, re.IGNORECASE)
+        # استخراج الأهداف (TP1, TP2, TP3) - أولوية لرسالة المؤشر
+        tp1 = None
+        tp2 = None
+        tp3 = None
+        stop_loss = None
         
-        tp1 = tp1_match.group(1).replace(',', '') if tp1_match else None
-        tp2 = tp2_match.group(1).replace(',', '') if tp2_match else None
-        tp3 = tp3_match.group(1).replace(',', '') if tp3_match else None
+        # أولوية: استخراج من رسالة المؤشر مباشرة
+        if message_text:
+            # TP1 من رسالة المؤشر
+            tp1_match = re.search(r'🎯\s*TP1:\s*([^\n]+)', message_text, re.IGNORECASE) or re.search(r'TP1:\s*([^\n]+)', message_text, re.IGNORECASE)
+            if tp1_match:
+                tp1_text = tp1_match.group(1).strip()
+                # استخراج السعر فقط من TP1 (قد يكون بصيغة "123.45 (+0.5%)")
+                tp1_price_match = re.search(r'([\d.,]+)', tp1_text)
+                tp1 = tp1_price_match.group(1).replace(',', '') if tp1_price_match else tp1_text.split()[0] if tp1_text else None
+            
+            # TP2 من رسالة المؤشر
+            tp2_match = re.search(r'🎯\s*TP2:\s*([^\n]+)', message_text, re.IGNORECASE) or re.search(r'TP2:\s*([^\n]+)', message_text, re.IGNORECASE)
+            if tp2_match:
+                tp2_text = tp2_match.group(1).strip()
+                tp2_price_match = re.search(r'([\d.,]+)', tp2_text)
+                tp2 = tp2_price_match.group(1).replace(',', '') if tp2_price_match else tp2_text.split()[0] if tp2_text else None
+            
+            # TP3 من رسالة المؤشر
+            tp3_match = re.search(r'🎯\s*TP3:\s*([^\n]+)', message_text, re.IGNORECASE) or re.search(r'TP3:\s*([^\n]+)', message_text, re.IGNORECASE)
+            if tp3_match:
+                tp3_text = tp3_match.group(1).strip()
+                tp3_price_match = re.search(r'([\d.,]+)', tp3_text)
+                tp3 = tp3_price_match.group(1).replace(',', '') if tp3_price_match else tp3_text.split()[0] if tp3_text else None
+            
+            # Stop Loss من رسالة المؤشر
+            sl_match = re.search(r'🛑\s*Stop\s+Loss:\s*([^\n]+)', message_text, re.IGNORECASE) or re.search(r'Stop\s+Loss:\s*([^\n]+)', message_text, re.IGNORECASE) or re.search(r'SL:\s*([^\n]+)', message_text, re.IGNORECASE)
+            if sl_match:
+                sl_text = sl_match.group(1).strip()
+                sl_price_match = re.search(r'([\d.,]+)', sl_text)
+                stop_loss = sl_price_match.group(1).replace(',', '') if sl_price_match else sl_text.split()[0] if sl_text else None
         
-        # استخراج وقف الخسارة
-        sl_match = re.search(r'SL[:\s]*@?\s*([\d.,]+)', cleaned_message, re.IGNORECASE) or re.search(r'STOP\s*LOSS[:\s]*@?\s*([\d.,]+)', cleaned_message, re.IGNORECASE)
-        stop_loss = sl_match.group(1).replace(',', '') if sl_match else None
+        # احتياطي: استخراج من cleaned_message (للرسائل من Strategy)
+        if not tp1 and not tp2 and not tp3:
+            tp1_match = re.search(r'TP1[:\s]*@?\s*([\d.,]+)', cleaned_message, re.IGNORECASE)
+            tp2_match = re.search(r'TP2[:\s]*@?\s*([\d.,]+)', cleaned_message, re.IGNORECASE)
+            tp3_match = re.search(r'TP3[:\s]*@?\s*([\d.,]+)', cleaned_message, re.IGNORECASE)
+            
+            tp1 = tp1_match.group(1).replace(',', '') if tp1_match else None
+            tp2 = tp2_match.group(1).replace(',', '') if tp2_match else None
+            tp3 = tp3_match.group(1).replace(',', '') if tp3_match else None
+        
+        if not stop_loss:
+            sl_match = re.search(r'SL[:\s]*@?\s*([\d.,]+)', cleaned_message, re.IGNORECASE) or re.search(r'STOP\s*LOSS[:\s]*@?\s*([\d.,]+)', cleaned_message, re.IGNORECASE)
+            stop_loss = sl_match.group(1).replace(',', '') if sl_match else None
         
         # ═══════════════════════════════════════════════════════════════
         # بناء الرسالة حسب نوع الإشارة
@@ -690,6 +770,8 @@ def format_trading_alert(data):
         if ticker:
             formatted_msg += f"💰 *العملة:* `{ticker}`\n"
         
+        # عرض السعر فقط إذا كان موجوداً وصحيحاً
+        # في حالة ENTRY_BUY/ENTRY_SELL، نعرض السعر فقط إذا كان من البيانات ({{close}})
         if price:
             try:
                 price_float = float(price)
@@ -697,6 +779,7 @@ def format_trading_alert(data):
                 formatted_msg += f"💵 *السعر:* `{formatted_price}`\n"
             except:
                 formatted_msg += f"💵 *السعر:* `{price}`\n"
+        # إذا لم يكن هناك سعر (خصوصاً في ENTRY)، لا نعرضه بدلاً من عرض حجم المركز
         
         # رسائل مخصصة حسب نوع الإشارة
         if signal_category == "ENTRY_BUY":
