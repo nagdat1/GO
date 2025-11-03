@@ -8,6 +8,8 @@ import requests
 import json
 import os
 from datetime import datetime
+import threading
+import time
 
 # ═══════════════════════════════════════════════════════════════════════════
 # ⚙️ إعدادات البوت
@@ -186,9 +188,38 @@ def webhook():
     return personal_webhook(TELEGRAM_CHAT_ID)
 
 
+def send_welcome_message():
+    """إرسال رسالة الترحيب عند البدء"""
+    global _welcome_sent
+    
+    if _welcome_sent:
+        return
+    
+    try:
+        # انتظر قليلاً لضمان أن gunicorn جاهز
+        time.sleep(3)
+        
+        if not _welcome_sent:
+            webhook_url = f"{PROJECT_URL}/personal/{TELEGRAM_CHAT_ID}/webhook"
+            welcome_msg = f"✅ *البوت يعمل الآن*\n\n🔗 *رابط Webhook:*\n`{webhook_url}`\n\n📋 *انسخ الرابط وضعه في TradingView*"
+            
+            if send_telegram_message(welcome_msg):
+                print(f"✅ Welcome message sent with URL: {webhook_url}")
+                _welcome_sent = True
+            else:
+                print(f"⚠️ Failed to send welcome message")
+    except Exception as e:
+        print(f"❌ Error sending welcome message: {e}")
+
+
+# إرسال رسالة الترحيب عند بدء التطبيق
+welcome_thread = threading.Thread(target=send_welcome_message, daemon=True)
+welcome_thread.start()
+
+# أيضاً عند أول طلب HTTP (كنسخة احتياطية)
 @app.before_request
 def before_first_request():
-    """إرسال رسالة الترحيب عند أول طلب HTTP"""
+    """إرسال رسالة الترحيب عند أول طلب HTTP (نسخة احتياطية)"""
     global _welcome_sent
     
     if not _welcome_sent:
