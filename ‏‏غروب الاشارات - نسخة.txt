@@ -298,74 +298,29 @@ if buySignal and TPSType == "Trailing" and tradeDateIsAllowed
     // Close Short position if exists
     if strategy.position_size < 0
         strategy.close("Short")
-        // 🔚 Position Closed (Short) - قبل فتح صفقة جديدة
-        msgClose = "🔚📊🔚 *POSITION CLOSED* 🔚📊🔚\n\n"
-        msgClose := msgClose + "📊 Symbol: " + syminfo.ticker + "\n"
-        msgClose := msgClose + "💰 Price: " + str.tostring(close, "#.##") + "\n"
-        msgClose := msgClose + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
-        msgClose := msgClose + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
-        alert(msgClose, alert.freq_once_per_bar_close)
     // Open Long position
     if strategy.position_size <= 0
         strategy.entry("Long" , strategy.long)
         longTradesCount := longTradesCount + 1
-        // 🟢 Buy Signal - رسالة الشراء
-        msgBuy = "🟢🟢🟢 *BUY SIGNAL* 🟢🟢🟢\n\n"
-        msgBuy := msgBuy + "📊 Symbol: " + syminfo.ticker + "\n"
-        msgBuy := msgBuy + "💰 Entry Price: " + str.tostring(close, "#.##") + "\n"
-        msgBuy := msgBuy + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
-        msgBuy := msgBuy + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + "\n\n"
-        msgBuy := msgBuy + "📝 *نوع الإدارة: Trailing Stop*"
-        alert(msgBuy, alert.freq_once_per_bar_close)
 
 if sellSignal and TPSType == "Trailing" and tradeDateIsAllowed
     // Close Long position if exists
     if strategy.position_size > 0
         strategy.close("Long")
-        // 🔚 Position Closed (Long) - قبل فتح صفقة جديدة
-        msgClose = "🔚📊🔚 *POSITION CLOSED* 🔚📊🔚\n\n"
-        msgClose := msgClose + "📊 Symbol: " + syminfo.ticker + "\n"
-        msgClose := msgClose + "💰 Price: " + str.tostring(close, "#.##") + "\n"
-        msgClose := msgClose + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
-        msgClose := msgClose + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
-        alert(msgClose, alert.freq_once_per_bar_close)
     // Open Short position
     if strategy.position_size >= 0
         strategy.entry("Short" , strategy.short)
         shortTradesCount := shortTradesCount + 1
-        // 🔴 Sell Signal - رسالة البيع
-        msgSell = "🔴🔴🔴 *SELL SIGNAL* 🔴🔴🔴\n\n"
-        msgSell := msgSell + "📊 Symbol: " + syminfo.ticker + "\n"
-        msgSell := msgSell + "💰 Entry Price: " + str.tostring(close, "#.##") + "\n"
-        msgSell := msgSell + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
-        msgSell := msgSell + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + "\n\n"
-        msgSell := msgSell + "📝 *نوع الإدارة: Trailing Stop*"
-        alert(msgSell, alert.freq_once_per_bar_close)
 
 //tradeType - Options Mode
 if buySignal and TPSType == "Options" and tradeDateIsAllowed
     if strategy.position_size <= 0
         strategy.entry("Long" , strategy.long)
         longTradesCount := longTradesCount + 1
-        // 🟢 Buy Signal - رسالة الشراء
-        msgBuy = "🟢🟢🟢 *BUY SIGNAL* 🟢🟢🟢\n\n"
-        msgBuy := msgBuy + "📊 Symbol: " + syminfo.ticker + "\n"
-        msgBuy := msgBuy + "💰 Entry Price: " + str.tostring(close, "#.##") + "\n"
-        msgBuy := msgBuy + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
-        msgBuy := msgBuy + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + "\n\n"
-        msgBuy := msgBuy + "📝 *نوع الإدارة: Options*"
-        alert(msgBuy, alert.freq_once_per_bar_close)
 
 if sellSignal and TPSType == "Options" and tradeDateIsAllowed
     if strategy.position_size > 0
         strategy.close("Long")
-        // 🔚 Position Closed - رسالة الإغلاق
-        msgClose = "🔚📊🔚 *POSITION CLOSED* 🔚📊🔚\n\n"
-        msgClose := msgClose + "📊 Symbol: " + syminfo.ticker + "\n"
-        msgClose := msgClose + "💰 Price: " + str.tostring(close, "#.##") + "\n"
-        msgClose := msgClose + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
-        msgClose := msgClose + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
-        alert(msgClose, alert.freq_once_per_bar_close)
 
 
 G_RISK       = '■ ' + 'Risk Management'
@@ -550,7 +505,7 @@ if strategy.position_size > 0 and condition ==  1.0 and TPSType == "ATR" and tra
         // حساب نسبة الربح المحققة (للشراء: من entryLine)
         profitPct = ((close - entryLine) / entryLine) * 100
         
-        msgTP1 = "🎯✅🎯 *TP1 - FIRST TARGET HIT* 🎯✅🎯\n\n"
+        msgTP1 = "🎯✅🎯 *TP1 - FIRST TARGET HIT!* 🎯✅🎯\n\n"
         msgTP1 := msgTP1 + "📊 Symbol: " + syminfo.ticker + "\n"
         msgTP1 := msgTP1 + "💰 Entry Price: " + str.tostring(entryLine, "#.##") + "\n"
         msgTP1 := msgTP1 + "💰 Exit Price: " + str.tostring(close, "#.##") + "\n"
@@ -575,7 +530,7 @@ if strategy.position_size > 0 and condition ==  1.1 and TPSType == "ATR" and tra
         // حساب نسبة الربح المحققة (للشراء: من entryLine)
         profitPct = ((close - entryLine) / entryLine) * 100
         
-        msgTP2 = "🎯✅🎯 *TP2 - SECOND TARGET HIT* 🎯✅🎯\n\n"
+        msgTP2 = "🎯✅🎯 *TP2 - SECOND TARGET HIT!* 🎯✅🎯\n\n"
         msgTP2 := msgTP2 + "📊 Symbol: " + syminfo.ticker + "\n"
         msgTP2 := msgTP2 + "💰 Entry Price: " + str.tostring(entryLine, "#.##") + "\n"
         msgTP2 := msgTP2 + "💰 Exit Price: " + str.tostring(close, "#.##") + "\n"
@@ -591,7 +546,7 @@ if strategy.position_size > 0 and condition ==  1.2 and TPSType == "ATR" and tra
         // حساب نسبة الربح المحققة (للشراء: من entryLine)
         profitPct = ((close - entryLine) / entryLine) * 100
         
-        msgTP3 = "🎯✅🎯 *TP3 - THIRD TARGET HIT* 🎯✅🎯\n\n"
+        msgTP3 = "🎯✅🎯 *TP3 - THIRD TARGET HIT!* 🎯✅🎯\n\n"
         msgTP3 := msgTP3 + "📊 Symbol: " + syminfo.ticker + "\n"
         msgTP3 := msgTP3 + "💰 Entry Price: " + str.tostring(entryLine, "#.##") + "\n"
         msgTP3 := msgTP3 + "💰 Exit Price: " + str.tostring(close, "#.##") + "\n"
@@ -646,7 +601,7 @@ if strategy.position_size < 0 and condition == -1.0 and TPSType == "ATR" and tra
         // حساب نسبة الربح المحققة (للبيع: من entryLine)
         profitPct = ((entryLine - close) / entryLine) * 100
         
-        msgTP1 = "🎯✅🎯 *TP1 - FIRST TARGET HIT* 🎯✅🎯\n\n"
+        msgTP1 = "🎯✅🎯 *TP1 - FIRST TARGET HIT!* 🎯✅🎯\n\n"
         msgTP1 := msgTP1 + "📊 Symbol: " + syminfo.ticker + "\n"
         msgTP1 := msgTP1 + "💰 Entry Price: " + str.tostring(entryLine, "#.##") + "\n"
         msgTP1 := msgTP1 + "💰 Exit Price: " + str.tostring(close, "#.##") + "\n"
@@ -671,7 +626,7 @@ if strategy.position_size < 0 and condition == -1.1 and TPSType == "ATR" and tra
         // حساب نسبة الربح المحققة (للبيع: من entryLine)
         profitPct = ((entryLine - close) / entryLine) * 100
         
-        msgTP2 = "🎯✅🎯 *TP2 - SECOND TARGET HIT* 🎯✅🎯\n\n"
+        msgTP2 = "🎯✅🎯 *TP2 - SECOND TARGET HIT!* 🎯✅🎯\n\n"
         msgTP2 := msgTP2 + "📊 Symbol: " + syminfo.ticker + "\n"
         msgTP2 := msgTP2 + "💰 Entry Price: " + str.tostring(entryLine, "#.##") + "\n"
         msgTP2 := msgTP2 + "💰 Exit Price: " + str.tostring(close, "#.##") + "\n"
@@ -687,7 +642,7 @@ if strategy.position_size < 0 and condition == -1.2 and TPSType == "ATR" and tra
         // حساب نسبة الربح المحققة (للبيع: من entryLine)
         profitPct = ((entryLine - close) / entryLine) * 100
         
-        msgTP3 = "🎯✅🎯 *TP3 - THIRD TARGET HIT* 🎯✅🎯\n\n"
+        msgTP3 = "🎯✅🎯 *TP3 - THIRD TARGET HIT!* 🎯✅🎯\n\n"
         msgTP3 := msgTP3 + "📊 Symbol: " + syminfo.ticker + "\n"
         msgTP3 := msgTP3 + "💰 Entry Price: " + str.tostring(entryLine, "#.##") + "\n"
         msgTP3 := msgTP3 + "💰 Exit Price: " + str.tostring(close, "#.##") + "\n"
@@ -1301,4 +1256,61 @@ if DemaAtrShort
 
 // Plotting
 plot( showAtr ? DemaAtr : na,  "ATR",  color=Trendcolor,  linewidth = 2 )
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🔗 Webhook Alerts - إعدادات التنبيهات للـ Webhook
+// ═══════════════════════════════════════════════════════════════════════════
+// ملاحظة: Pine Script لا يدعم HTTP requests مباشرة
+// يجب استخدام TradingView Alerts مع Webhook URL
+// انظر README.md للحصول على تعليمات إعداد Alerts
+
+// Alert Conditions للـ Webhook
+alertcondition(buySignal and TPSType == "ATR" and tradeDateIsAllowed, 
+     title="BUY Signal for Webhook", 
+     message="{{ticker}} - BUY Signal")
+
+alertcondition(sellSignal and TPSType == "ATR" and tradeDateIsAllowed, 
+     title="SELL Signal for Webhook", 
+     message="{{ticker}} - SELL Signal")
+
+alertcondition(longTP1 and TPSType == "ATR" and tradeDateIsAllowed, 
+     title="TP1 Hit for Webhook", 
+     message="{{ticker}} - TP1 Hit")
+
+alertcondition(longTP2 and TPSType == "ATR" and tradeDateIsAllowed, 
+     title="TP2 Hit for Webhook", 
+     message="{{ticker}} - TP2 Hit")
+
+alertcondition(longTP3 and TPSType == "ATR" and tradeDateIsAllowed, 
+     title="TP3 Hit for Webhook", 
+     message="{{ticker}} - TP3 Hit")
+
+alertcondition(shortTP1 and TPSType == "ATR" and tradeDateIsAllowed, 
+     title="TP1 Hit (Short) for Webhook", 
+     message="{{ticker}} - TP1 Hit")
+
+alertcondition(shortTP2 and TPSType == "ATR" and tradeDateIsAllowed, 
+     title="TP2 Hit (Short) for Webhook", 
+     message="{{ticker}} - TP2 Hit")
+
+alertcondition(shortTP3 and TPSType == "ATR" and tradeDateIsAllowed, 
+     title="TP3 Hit (Short) for Webhook", 
+     message="{{ticker}} - TP3 Hit")
+
+alertcondition(longSL and TPSType == "ATR" and tradeDateIsAllowed, 
+     title="Stop Loss Hit for Webhook", 
+     message="{{ticker}} - Stop Loss Hit")
+
+alertcondition(shortSL and TPSType == "ATR" and tradeDateIsAllowed, 
+     title="Stop Loss Hit (Short) for Webhook", 
+     message="{{ticker}} - Stop Loss Hit")
+
+alertcondition(longX and tradeDateIsAllowed, 
+     title="Position Closed for Webhook", 
+     message="{{ticker}} - Position Closed")
+
+alertcondition(shortX and tradeDateIsAllowed, 
+     title="Position Closed (Short) for Webhook", 
+     message="{{ticker}} - Position Closed")
+
 // ==========================================================================================

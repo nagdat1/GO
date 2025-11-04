@@ -1,1297 +1,150 @@
 """
-TradingView to Telegram Bot
-بوت تلجرام لاستقبال التنبيهات من TradingView
+TradingView Webhook to Telegram Bot
+Main Flask application to receive webhooks from TradingView and send to Telegram
 """
-
 from flask import Flask, request, jsonify
-import requests
-import json
-import os
-from datetime import datetime
-import threading
-import time
+from telegram_bot import (
+    send_message,
+    format_buy_signal,
+    format_sell_signal,
+    format_tp1_hit,
+    format_tp2_hit,
+    format_tp3_hit,
+    format_stop_loss_hit,
+    format_position_closed
+)
+from config import validate_config, WEBHOOK_PORT, DEBUG
+import logging
 
-# ═══════════════════════════════════════════════════════════════════════════
-# ⚙️ إعدادات البوت
-# ═══════════════════════════════════════════════════════════════════════════
-TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '8361920962:AAFkWchaQStjaD09ayMI8VYm1vadr4p6zEY')
-TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '8169000394')
-TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-# الحصول على رابط المشروع
-RAILWAY_PUBLIC_DOMAIN = os.getenv('RAILWAY_PUBLIC_DOMAIN', 'go-production-e51a.up.railway.app')
-PROJECT_URL = f"https://{RAILWAY_PUBLIC_DOMAIN}" if not RAILWAY_PUBLIC_DOMAIN.startswith('http') else RAILWAY_PUBLIC_DOMAIN
-
+# Initialize Flask app
 app = Flask(__name__)
 
-# متغير لتتبع ما إذا تم إرسال رسالة الترحيب
-_welcome_sent = False
-
-
-def send_telegram_message(message, parse_mode="Markdown"):
-    """إرسال رسالة إلى تلجرام"""
-    try:
-        url = f"{TELEGRAM_API_URL}/sendMessage"
-        data = {
-            "chat_id": TELEGRAM_CHAT_ID,
-            "text": message,
-            "parse_mode": parse_mode
-        }
-        response = requests.post(url, json=data, timeout=10)
-        result = response.json()
-        
-        if result.get('ok'):
-            print(f"   ✅ Telegram API: Message sent successfully")
-            return True
-        else:
-            error_code = result.get('error_code', 'N/A')
-            error_desc = result.get('description', 'Unknown error')
-            print(f"   ❌ Telegram API Error {error_code}: {error_desc}")
-            return False
-    except Exception as e:
-        print(f"   ❌ Exception sending message: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
-def format_trading_alert(data):
-    """
-    تحويل بيانات TradingView إلى رسالة منسقة - نسخة احترافية
-    يدعم: فتح صفقة، إغلاق، أهداف (TP1, TP2, TP3)، وقف خسارة
-    متوافق مع رسائل مؤشر "غروب الاشارات"
-    
-    التنبيهات المدعومة:
-    1. 🟢 BUY SIGNAL - إشارة شراء
-    2. 🔴 SELL SIGNAL - إشارة بيع
-    3. 🔚 POSITION CLOSED - إغلاق صفقة
-    4. 🎯 TP1/TP2/TP3 - تحقيق الأهداف
-    5. 🛑 STOP LOSS - وقف خسارة
-    """
-    import re
-    
-    # استخراج النص من البيانات
-    if isinstance(data, str):
-        message_text = data
-    elif not data:
-        return f"🔔 *تنبيه ورد*\n\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-    else:
-        message_text = (data.get('message') or 
-               data.get('text') or 
-               data.get('msg') or 
-               data.get('alert_message') or 
-               data.get('signal') or
-               data.get('alert') or "")
-    
-        if not message_text:
-            message_text = str(data)
-    
-    # ═══════════════════════════════════════════════════════════════
-    # تحليل رسائل المؤشر "غروب الاشارات" وإعادة صياغتها بشكل احترافي
-    # ═══════════════════════════════════════════════════════════════
-    if message_text:
-        import re
-        
-        # استخراج البيانات الدقيقة من TradingView (إن وجدت)
-        # TradingView يرسل البيانات في JSON format
-        tv_symbol = None
-        tv_price = None
-        tv_close = None
-        tv_time = None
-        tv_timeframe = None
-        
-        if isinstance(data, dict):
-            # استخراج البيانات من TradingView
-            tv_symbol = (data.get('symbol') or data.get('ticker') or 
-                        data.get('{{ticker}}') or data.get('syminfo.ticker'))
-            tv_close = (data.get('close') or data.get('{{close}}') or 
-                       data.get('price') or data.get('Price'))
-            tv_price = tv_close  # السعر = close عادة
-            tv_time = (data.get('time') or data.get('{{time}}') or 
-                      data.get('timestamp') or data.get('{{timenow}}'))
-            tv_timeframe = (data.get('timeframe') or data.get('{{timeframe}}') or
-                           data.get('interval'))
-        
-        # التحقق من أن الرسالة من المؤشر
-        is_indicator_message = ('🟢🟢🟢' in message_text or '🔴🔴🔴' in message_text or 
-                               '🎯✅🎯' in message_text or '🛑😔🛑' in message_text or 
-                               '🔚📊🔚' in message_text or '*BUY SIGNAL*' in message_text or
-                               '*SELL SIGNAL*' in message_text or '*TP1 - FIRST TARGET HIT*' in message_text or
-                               '*TP2 - SECOND TARGET HIT*' in message_text or '*TP3 - THIRD TARGET HIT*' in message_text or
-                               '*STOP LOSS HIT*' in message_text or '*POSITION CLOSED*' in message_text)
-        
-        if is_indicator_message:
-            # استخراج المعلومات من رسالة المؤشر
-            formatted_msg = ""
-            
-            # 1. إشارة شراء (BUY SIGNAL)
-            if '*BUY SIGNAL*' in message_text or '🟢🟢🟢' in message_text:
-                # استخراج Symbol - أولوية للبيانات من TradingView
-                symbol = tv_symbol
-                if not symbol:
-                    symbol_match = re.search(r'Symbol:\s*([^\n]+)', message_text, re.IGNORECASE)
-                    symbol = symbol_match.group(1).strip() if symbol_match else None
-                
-                # استخراج Entry Price بدقة - أولوية 1: من رسالة المؤشر مباشرة
-                entry_price = None
-                
-                # أولوية كاملة لرسالة المؤشر - نبحث في الرسالة أولاً
-                entry_patterns = [
-                    r'💰\s*Entry\s+Price:\s*([\d.,]+)',
-                    r'Entry\s+Price:\s*([\d.,]+)'
-                ]
-                for pattern in entry_patterns:
-                    entry_match = re.search(pattern, message_text, re.IGNORECASE)
-                    if entry_match:
-                        price_raw = entry_match.group(1).strip().replace(',', '')
-                        try:
-                            price_val = float(price_raw)
-                            if price_val >= 1:
-                                entry_price = f"{price_val:,.4f}".rstrip('0').rstrip('.')
-                            else:
-                                entry_price = f"{price_val:,.8f}".rstrip('0').rstrip('.')
-                            break
-                        except:
-                            continue
-                
-                # إذا لم نجد في الرسالة، نستخدم النص كما هو
-                if not entry_price:
-                    entry_match = re.search(r'Entry\s+Price:\s*([^\n]+)', message_text, re.IGNORECASE)
-                    if entry_match:
-                        entry_price = entry_match.group(1).strip()
-                
-                # احتياطي: البيانات من TradingView فقط إذا لم نجد في الرسالة
-                if not entry_price and tv_close:
-                    try:
-                        price_val = float(tv_close)
-                        if price_val >= 1:
-                            entry_price = f"{price_val:,.4f}".rstrip('0').rstrip('.')
-                        else:
-                            entry_price = f"{price_val:,.8f}".rstrip('0').rstrip('.')
-                    except:
-                        pass
-                
-                # استخراج Time وتحويله - أولوية للبيانات من TradingView
-                time_str = datetime.now().strftime('%Y-%m-%d %H:%M')
-                
-                if tv_time:
-                    try:
-                        # إذا كان timestamp
-                        if isinstance(tv_time, (int, float)):
-                            timestamp_val = float(tv_time)
-                            if timestamp_val > 1000000000000:  # ميلي ثانية
-                                timestamp_s = timestamp_val / 1000
-                            else:  # ثانية
-                                timestamp_s = timestamp_val
-                            time_str = datetime.fromtimestamp(timestamp_s).strftime('%Y-%m-%d %H:%M')
-                        elif isinstance(tv_time, str):
-                            # محاولة تحويل نص timestamp
-                            if tv_time.isdigit() and len(tv_time) >= 10:
-                                timestamp_val = int(tv_time)
-                                if timestamp_val > 1000000000000:
-                                    timestamp_s = timestamp_val / 1000
-                                else:
-                                    timestamp_s = timestamp_val
-                                time_str = datetime.fromtimestamp(timestamp_s).strftime('%Y-%m-%d %H:%M')
-                            elif '-' in tv_time and len(tv_time) >= 16:
-                                # تنسيق: "2025-11-03 04:15:11" أو "2025-11-03 04:15"
-                                time_str = tv_time[:16]
-                    except:
-                        pass
-                
-                # إذا لم نجد من البيانات، نحاول من الرسالة
-                if time_str == datetime.now().strftime('%Y-%m-%d %H:%M'):
-                    time_match = re.search(r'Time:\s*([^\n]+)', message_text, re.IGNORECASE)
-                    time_raw = time_match.group(1).strip() if time_match else None
-                    
-                    if time_raw:
-                        try:
-                            # إذا كان timestamp بالميلي ثانية
-                            if time_raw.isdigit() and len(time_raw) >= 10:
-                                timestamp_ms = int(time_raw)
-                                if timestamp_ms > 1000000000000:
-                                    timestamp_s = timestamp_ms / 1000
-                                else:
-                                    timestamp_s = timestamp_ms
-                                time_str = datetime.fromtimestamp(timestamp_s).strftime('%Y-%m-%d %H:%M')
-                            # إذا كان تاريخ نصي
-                            elif '-' in time_raw and len(time_raw) >= 16:
-                                # تنسيق: "2025-11-03 04:15:11" أو "2025-11-03 04:15"
-                                time_str = time_raw[:16]
-                            # معالجة حالة "yyyy-MM-dd HH:mm" + timestamp
-                            elif 'yyyy' in time_raw.lower() and time_raw.replace('yyyy-MM-dd HH:mm', '').strip().isdigit():
-                                # استخراج timestamp من النهاية
-                                timestamp_part = time_raw.replace('yyyy-MM-dd HH:mm', '').strip()
-                                if timestamp_part.isdigit() and len(timestamp_part) >= 10:
-                                    timestamp_ms = int(timestamp_part)
-                                    if timestamp_ms > 1000000000000:
-                                        timestamp_s = timestamp_ms / 1000
-                                    else:
-                                        timestamp_s = timestamp_ms
-                                    time_str = datetime.fromtimestamp(timestamp_s).strftime('%Y-%m-%d %H:%M')
-                        except:
-                            pass
-                
-                # استخراج Timeframe - أولوية للبيانات من TradingView
-                timeframe = tv_timeframe
-                if not timeframe:
-                    timeframe_match = re.search(r'Timeframe:\s*([^\n]+)', message_text, re.IGNORECASE)
-                    timeframe = timeframe_match.group(1).strip() if timeframe_match else None
-                
-                # استخراج TP1, TP2, TP3
-                tp1_match = re.search(r'TP1:\s*([^\n]+)', message_text, re.IGNORECASE)
-                tp2_match = re.search(r'TP2:\s*([^\n]+)', message_text, re.IGNORECASE)
-                tp3_match = re.search(r'TP3:\s*([^\n]+)', message_text, re.IGNORECASE)
-                
-                tp1 = tp1_match.group(1).strip() if tp1_match else None
-                tp2 = tp2_match.group(1).strip() if tp2_match else None
-                tp3 = tp3_match.group(1).strip() if tp3_match else None
-                
-                # استخراج Stop Loss
-                sl_match = re.search(r'Stop\s+Loss:\s*([^\n]+)', message_text, re.IGNORECASE)
-                stop_loss = sl_match.group(1).strip() if sl_match else None
-                
-                # بناء الرسالة بشكل منظم - مطابق لملف التوثيق
-                formatted_msg = "🟢🟢🟢 *BUY SIGNAL* 🟢🟢🟢\n\n"
-                
-                if symbol:
-                    formatted_msg += f"📊 Symbol: {symbol}\n"
-                if entry_price:
-                    formatted_msg += f"💰 Entry Price: {entry_price}\n"
-                formatted_msg += f"⏰ Time: {time_str}\n"
-                if timeframe:
-                    formatted_msg += f"📈 Timeframe: {timeframe}\n"
-                
-                # إظهار أهداف الربح فقط إذا كانت موجودة
-                if tp1 or tp2 or tp3:
-                    formatted_msg += "\n🎯 *Take Profit Targets:*\n"
-                    if tp1:
-                        formatted_msg += f"🎯 TP1: {tp1}\n"
-                    if tp2:
-                        formatted_msg += f"🎯 TP2: {tp2}\n"
-                    if tp3:
-                        formatted_msg += f"🎯 TP3: {tp3}\n"
-                
-                if stop_loss:
-                    formatted_msg += f"\n🛑 Stop Loss: {stop_loss}\n"
-                
-                return formatted_msg
-            
-            # 2. إشارة بيع (SELL SIGNAL) - نسخة كاملة من BUY
-            elif '*SELL SIGNAL*' in message_text or '🔴🔴🔴' in message_text:
-                # استخراج Symbol - أولوية للبيانات من TradingView
-                symbol = tv_symbol
-                if not symbol:
-                    symbol_match = re.search(r'Symbol:\s*([^\n]+)', message_text, re.IGNORECASE)
-                    symbol = symbol_match.group(1).strip() if symbol_match else None
-                
-                # استخراج Entry Price بدقة - أولوية 1: من رسالة المؤشر مباشرة
-                entry_price = None
-                
-                # أولوية كاملة لرسالة المؤشر - نبحث في الرسالة أولاً
-                entry_patterns = [
-                    r'💰\s*Entry\s+Price:\s*([\d.,]+)',
-                    r'Entry\s+Price:\s*([\d.,]+)'
-                ]
-                for pattern in entry_patterns:
-                    entry_match = re.search(pattern, message_text, re.IGNORECASE)
-                    if entry_match:
-                        price_raw = entry_match.group(1).strip().replace(',', '')
-                        try:
-                            price_val = float(price_raw)
-                            if price_val >= 1:
-                                entry_price = f"{price_val:,.4f}".rstrip('0').rstrip('.')
-                            else:
-                                entry_price = f"{price_val:,.8f}".rstrip('0').rstrip('.')
-                            break
-                        except:
-                            continue
-                
-                # إذا لم نجد في الرسالة، نستخدم النص كما هو
-                if not entry_price:
-                    entry_match = re.search(r'Entry\s+Price:\s*([^\n]+)', message_text, re.IGNORECASE)
-                    if entry_match:
-                        entry_price = entry_match.group(1).strip()
-                
-                # احتياطي: البيانات من TradingView فقط إذا لم نجد في الرسالة
-                if not entry_price and tv_close:
-                    try:
-                        price_val = float(tv_close)
-                        if price_val >= 1:
-                            entry_price = f"{price_val:,.4f}".rstrip('0').rstrip('.')
-                        else:
-                            entry_price = f"{price_val:,.8f}".rstrip('0').rstrip('.')
-                    except:
-                        pass
-                
-                # استخراج Time وتحويله - أولوية للبيانات من TradingView
-                time_str = datetime.now().strftime('%Y-%m-%d %H:%M')
-                
-                if tv_time:
-                    try:
-                        # إذا كان timestamp
-                        if isinstance(tv_time, (int, float)):
-                            timestamp_val = float(tv_time)
-                            if timestamp_val > 1000000000000:  # ميلي ثانية
-                                timestamp_s = timestamp_val / 1000
-                            else:  # ثانية
-                                timestamp_s = timestamp_val
-                            time_str = datetime.fromtimestamp(timestamp_s).strftime('%Y-%m-%d %H:%M')
-                        elif isinstance(tv_time, str):
-                            # محاولة تحويل نص timestamp
-                            if tv_time.isdigit() and len(tv_time) >= 10:
-                                timestamp_val = int(tv_time)
-                                if timestamp_val > 1000000000000:
-                                    timestamp_s = timestamp_val / 1000
-                                else:
-                                    timestamp_s = timestamp_val
-                                time_str = datetime.fromtimestamp(timestamp_s).strftime('%Y-%m-%d %H:%M')
-                            elif '-' in tv_time and len(tv_time) >= 16:
-                                # تنسيق: "2025-11-03 04:15:11" أو "2025-11-03 04:15"
-                                time_str = tv_time[:16]
-                    except:
-                        pass
-                
-                # إذا لم نجد من البيانات، نحاول من الرسالة
-                if time_str == datetime.now().strftime('%Y-%m-%d %H:%M'):
-                    time_match = re.search(r'Time:\s*([^\n]+)', message_text, re.IGNORECASE)
-                    time_raw = time_match.group(1).strip() if time_match else None
-                    
-                    if time_raw:
-                        try:
-                            # إذا كان timestamp بالميلي ثانية
-                            if time_raw.isdigit() and len(time_raw) >= 10:
-                                timestamp_ms = int(time_raw)
-                                if timestamp_ms > 1000000000000:
-                                    timestamp_s = timestamp_ms / 1000
-                                else:
-                                    timestamp_s = timestamp_ms
-                                time_str = datetime.fromtimestamp(timestamp_s).strftime('%Y-%m-%d %H:%M')
-                            # إذا كان تاريخ نصي
-                            elif '-' in time_raw and len(time_raw) >= 16:
-                                # تنسيق: "2025-11-03 04:15:11" أو "2025-11-03 04:15"
-                                time_str = time_raw[:16]
-                            # معالجة حالة "yyyy-MM-dd HH:mm" + timestamp
-                            elif 'yyyy' in time_raw.lower() and time_raw.replace('yyyy-MM-dd HH:mm', '').strip().isdigit():
-                                # استخراج timestamp من النهاية
-                                timestamp_part = time_raw.replace('yyyy-MM-dd HH:mm', '').strip()
-                                if timestamp_part.isdigit() and len(timestamp_part) >= 10:
-                                    timestamp_ms = int(timestamp_part)
-                                    if timestamp_ms > 1000000000000:
-                                        timestamp_s = timestamp_ms / 1000
-                                    else:
-                                        timestamp_s = timestamp_ms
-                                    time_str = datetime.fromtimestamp(timestamp_s).strftime('%Y-%m-%d %H:%M')
-                        except:
-                            pass
-                
-                # استخراج Timeframe - أولوية للبيانات من TradingView
-                timeframe = tv_timeframe
-                if not timeframe:
-                    timeframe_match = re.search(r'Timeframe:\s*([^\n]+)', message_text, re.IGNORECASE)
-                    timeframe = timeframe_match.group(1).strip() if timeframe_match else None
-                
-                # استخراج TP1, TP2, TP3
-                tp1_match = re.search(r'TP1:\s*([^\n]+)', message_text, re.IGNORECASE)
-                tp2_match = re.search(r'TP2:\s*([^\n]+)', message_text, re.IGNORECASE)
-                tp3_match = re.search(r'TP3:\s*([^\n]+)', message_text, re.IGNORECASE)
-                
-                tp1 = tp1_match.group(1).strip() if tp1_match else None
-                tp2 = tp2_match.group(1).strip() if tp2_match else None
-                tp3 = tp3_match.group(1).strip() if tp3_match else None
-                
-                # استخراج Stop Loss
-                sl_match = re.search(r'Stop\s+Loss:\s*([^\n]+)', message_text, re.IGNORECASE)
-                stop_loss = sl_match.group(1).strip() if sl_match else None
-                
-                # بناء الرسالة بشكل منظم - مطابق لملف التوثيق
-                formatted_msg = "🔴🔴🔴 *SELL SIGNAL* 🔴🔴🔴\n\n"
-                
-                if symbol:
-                    formatted_msg += f"📊 Symbol: {symbol}\n"
-                if entry_price:
-                    formatted_msg += f"💰 Entry Price: {entry_price}\n"
-                formatted_msg += f"⏰ Time: {time_str}\n"
-                if timeframe:
-                    formatted_msg += f"📈 Timeframe: {timeframe}\n"
-                
-                # إظهار أهداف الربح فقط إذا كانت موجودة
-                if tp1 or tp2 or tp3:
-                    formatted_msg += "\n🎯 *Take Profit Targets:*\n"
-                    if tp1:
-                        formatted_msg += f"🎯 TP1: {tp1}\n"
-                    if tp2:
-                        formatted_msg += f"🎯 TP2: {tp2}\n"
-                    if tp3:
-                        formatted_msg += f"🎯 TP3: {tp3}\n"
-                
-                if stop_loss:
-                    formatted_msg += f"\n🛑 Stop Loss: {stop_loss}\n"
-                
-                return formatted_msg
-            
-            # 3. ضرب الهدف (TP1, TP2, TP3)
-            elif '*TP1 - FIRST TARGET HIT*' in message_text or '*TP2 - SECOND TARGET HIT*' in message_text or '*TP3 - THIRD TARGET HIT*' in message_text or ('🎯✅🎯' in message_text and 'TARGET HIT' in message_text.upper()):
-                tp_num = "1" if "TP1" in message_text or "FIRST" in message_text.upper() else \
-                         "2" if "TP2" in message_text or "SECOND" in message_text.upper() else \
-                         "3" if "TP3" in message_text or "THIRD" in message_text.upper() else "?"
-                
-                symbol_match = re.search(r'Symbol:\s*([^\n]+)', message_text, re.IGNORECASE)
-                symbol = symbol_match.group(1).strip() if symbol_match else None
-                
-                # استخراج Entry Price بدقة
-                entry_price = None
-                entry_patterns = [
-                    r'💰\s*Entry\s+Price:\s*([\d.,]+)',
-                    r'Entry\s+Price:\s*([\d.,]+)'
-                ]
-                for pattern in entry_patterns:
-                    entry_match = re.search(pattern, message_text, re.IGNORECASE)
-                    if entry_match:
-                        price_raw = entry_match.group(1).strip().replace(',', '')
-                        try:
-                            price_val = float(price_raw)
-                            if price_val >= 1:
-                                entry_price = f"{price_val:,.4f}".rstrip('0').rstrip('.')
-                            else:
-                                entry_price = f"{price_val:,.8f}".rstrip('0').rstrip('.')
-                            break
-                        except:
-                            continue
-                
-                # استخراج Exit Price بدقة
-                exit_price = None
-                exit_patterns = [
-                    r'💰\s*Exit\s+Price:\s*([\d.,]+)',
-                    r'Exit\s+Price:\s*([\d.,]+)'
-                ]
-                for pattern in exit_patterns:
-                    exit_match = re.search(pattern, message_text, re.IGNORECASE)
-                    if exit_match:
-                        price_raw = exit_match.group(1).strip().replace(',', '')
-                        try:
-                            price_val = float(price_raw)
-                            if price_val >= 1:
-                                exit_price = f"{price_val:,.4f}".rstrip('0').rstrip('.')
-                            else:
-                                exit_price = f"{price_val:,.8f}".rstrip('0').rstrip('.')
-                            break
-                        except:
-                            continue
-                
-                profit_match = re.search(r'Profit:\s*([^\n]+)', message_text, re.IGNORECASE)
-                profit = profit_match.group(1).strip() if profit_match else None
-                
-                time_match = re.search(r'Time:\s*([^\n]+)', message_text, re.IGNORECASE)
-                time_raw = time_match.group(1).strip() if time_match else None
-                time_str = datetime.now().strftime('%Y-%m-%d %H:%M')
-                
-                if time_raw:
-                    try:
-                        # إذا كان timestamp بالميلي ثانية
-                        if time_raw.isdigit() and len(time_raw) >= 10:
-                            timestamp_ms = int(time_raw)
-                            if timestamp_ms > 1000000000000:
-                                timestamp_s = timestamp_ms / 1000
-                            else:
-                                timestamp_s = timestamp_ms
-                            time_str = datetime.fromtimestamp(timestamp_s).strftime('%Y-%m-%d %H:%M')
-                        else:
-                            time_str = time_raw
-                            if 'yyyy' not in time_raw.lower() and 'MM' not in time_raw:
-                                try:
-                                    # تنسيق: "2025-11-03 04:15:11" أو "2025-11-03 04:15"
-                                    if len(time_raw) >= 16 and '-' in time_raw:
-                                        time_str = time_raw[:16]  # أخذ أول 16 حرف (YYYY-MM-DD HH:MM)
-                                except:
-                                    pass
-                    except:
-                        pass
-                
-                # بناء الرسالة - مطابق لملف التوثيق
-                tp_title = f"*TP{tp_num} - {'FIRST' if tp_num == '1' else 'SECOND' if tp_num == '2' else 'THIRD'} TARGET HIT!*"
-                formatted_msg = f"🎯✅🎯 {tp_title} 🎯✅🎯\n\n"
-                
-                if symbol:
-                    formatted_msg += f"📊 Symbol: {symbol}\n"
-                if entry_price:
-                    formatted_msg += f"💰 Entry Price: {entry_price}\n"
-                if exit_price:
-                    formatted_msg += f"💰 Exit Price: {exit_price}\n"
-                if profit:
-                    formatted_msg += f"💵 Profit: {profit}\n"
-                formatted_msg += f"⏰ Time: {time_str}\n"
-                timeframe_match = re.search(r'Timeframe:\s*([^\n]+)', message_text, re.IGNORECASE)
-                if timeframe_match:
-                    timeframe = timeframe_match.group(1).strip()
-                    formatted_msg += f"📈 Timeframe: {timeframe}\n"
-                
-                return formatted_msg
-            
-            # 4. ضرب وقف الخسارة (STOP LOSS)
-            elif '*STOP LOSS HIT*' in message_text or '🛑😔🛑' in message_text:
-                symbol_match = re.search(r'Symbol:\s*([^\n]+)', message_text, re.IGNORECASE)
-                symbol = symbol_match.group(1).strip() if symbol_match else None
-                
-                # استخراج Price بدقة
-                price = None
-                price_patterns = [
-                    r'💰\s*Price:\s*([\d.,]+)',
-                    r'Price:\s*([\d.,]+)'
-                ]
-                for pattern in price_patterns:
-                    price_match = re.search(pattern, message_text, re.IGNORECASE)
-                    if price_match:
-                        price_raw = price_match.group(1).strip().replace(',', '')
-                        try:
-                            price_val = float(price_raw)
-                            if price_val >= 1:
-                                price = f"{price_val:,.4f}".rstrip('0').rstrip('.')
-                            else:
-                                price = f"{price_val:,.8f}".rstrip('0').rstrip('.')
-                            break
-                        except:
-                            continue
-                
-                time_match = re.search(r'Time:\s*([^\n]+)', message_text, re.IGNORECASE)
-                time_raw = time_match.group(1).strip() if time_match else None
-                time_str = datetime.now().strftime('%Y-%m-%d %H:%M')
-                
-                if time_raw:
-                    try:
-                        # إذا كان timestamp بالميلي ثانية
-                        if time_raw.isdigit() and len(time_raw) >= 10:
-                            timestamp_ms = int(time_raw)
-                            if timestamp_ms > 1000000000000:
-                                timestamp_s = timestamp_ms / 1000
-                            else:
-                                timestamp_s = timestamp_ms
-                            time_str = datetime.fromtimestamp(timestamp_s).strftime('%Y-%m-%d %H:%M')
-                        else:
-                            time_str = time_raw
-                            if 'yyyy' not in time_raw.lower() and 'MM' not in time_raw:
-                                try:
-                                    # تنسيق: "2025-11-03 04:15:11" أو "2025-11-03 04:15"
-                                    if len(time_raw) >= 16 and '-' in time_raw:
-                                        time_str = time_raw[:16]  # أخذ أول 16 حرف (YYYY-MM-DD HH:MM)
-                                except:
-                                    pass
-                    except:
-                        pass
-                
-                # بناء الرسالة - مطابق لملف التوثيق
-                formatted_msg = "🛑😔🛑 *STOP LOSS HIT* 🛑😔🛑\n\n"
-                
-                if symbol:
-                    formatted_msg += f"📊 Symbol: {symbol}\n"
-                if price:
-                    formatted_msg += f"💰 Price: {price}\n"
-                formatted_msg += f"⏰ Time: {time_str}\n"
-                timeframe_match = re.search(r'Timeframe:\s*([^\n]+)', message_text, re.IGNORECASE)
-                if timeframe_match:
-                    timeframe = timeframe_match.group(1).strip()
-                    formatted_msg += f"📈 Timeframe: {timeframe}\n"
-                
-                # التحقق من أن الرسالة لم تُعاد كـ None (تجاهل)
-                if formatted_msg:
-                    return formatted_msg
-            
-            # 5. إغلاق الصفقة (POSITION CLOSED)
-            elif '*POSITION CLOSED*' in message_text or '🔚📊🔚' in message_text:
-                # استخراج Symbol
-                symbol_match = re.search(r'Symbol:\s*([^\n]+)', message_text, re.IGNORECASE)
-                symbol = symbol_match.group(1).strip() if symbol_match else None
-                
-                # استخراج Price بدقة
-                price = None
-                price_patterns = [
-                    r'💰\s*Price:\s*([\d.,]+)',
-                    r'Price:\s*([\d.,]+)'
-                ]
-                for pattern in price_patterns:
-                    price_match = re.search(pattern, message_text, re.IGNORECASE)
-                    if price_match:
-                        price_raw = price_match.group(1).strip().replace(',', '')
-                        try:
-                            price_val = float(price_raw)
-                            if price_val >= 1:
-                                price = f"{price_val:,.4f}".rstrip('0').rstrip('.')
-                            else:
-                                price = f"{price_val:,.8f}".rstrip('0').rstrip('.')
-                            break
-                        except:
-                            continue
-                
-                # استخراج Time
-                time_match = re.search(r'Time:\s*([^\n]+)', message_text, re.IGNORECASE)
-                time_raw = time_match.group(1).strip() if time_match else None
-                time_str = datetime.now().strftime('%Y-%m-%d %H:%M')
-                
-                if time_raw:
-                    try:
-                        # إذا كان timestamp بالميلي ثانية
-                        if time_raw.isdigit() and len(time_raw) >= 10:
-                            timestamp_ms = int(time_raw)
-                            if timestamp_ms > 1000000000000:
-                                timestamp_s = timestamp_ms / 1000
-                            else:
-                                timestamp_s = timestamp_ms
-                            time_str = datetime.fromtimestamp(timestamp_s).strftime('%Y-%m-%d %H:%M')
-                        else:
-                            time_str = time_raw
-                            if 'yyyy' not in time_raw.lower() and 'MM' not in time_raw:
-                                try:
-                                    # تنسيق: "2025-11-03 04:15:11" أو "2025-11-03 04:15"
-                                    if len(time_raw) >= 16 and '-' in time_raw:
-                                        time_str = time_raw[:16]  # أخذ أول 16 حرف (YYYY-MM-DD HH:MM)
-                                except:
-                                    pass
-                    except:
-                        pass
-                
-                # استخراج Timeframe
-                timeframe_match = re.search(r'Timeframe:\s*([^\n]+)', message_text, re.IGNORECASE)
-                timeframe = timeframe_match.group(1).strip() if timeframe_match else None
-                
-                # بناء الرسالة
-                formatted_msg = "🔚📊🔚 *POSITION CLOSED* 🔚📊🔚\n\n"
-                
-                if symbol:
-                    formatted_msg += f"📊 Symbol: {symbol}\n"
-                if price:
-                    formatted_msg += f"💰 Price: {price}\n"
-                formatted_msg += f"⏰ Time: {time_str}\n"
-                if timeframe:
-                    formatted_msg += f"📈 Timeframe: {timeframe}\n"
-                
-                return formatted_msg
-            
-            # إذا كانت رسالة المؤشر لكن لم تتطابق مع أي نوع أعلاه، نستخدم البيانات العامة
-            else:
-                # استخراج السعر العام من الرسالة
-                price = None
-                price_patterns = [
-                    r'💰\s*Entry\s+Price:\s*([\d.,]+)',
-                    r'💰\s*Price:\s*([\d.,]+)',
-                    r'💰\s*Exit\s+Price:\s*([\d.,]+)',
-                    r'Entry\s+Price:\s*([\d.,]+)',
-                    r'Price:\s*([\d.,]+)',
-                    r'Exit\s+Price:\s*([\d.,]+)'
-                ]
-                for pattern in price_patterns:
-                    price_match = re.search(pattern, message_text, re.IGNORECASE)
-                    if price_match:
-                        price_raw = price_match.group(1).strip().replace(',', '')
-                        try:
-                            price_val = float(price_raw)
-                            if price_val >= 1:
-                                price = f"{price_val:,.4f}".rstrip('0').rstrip('.')
-                            else:
-                                price = f"{price_val:,.8f}".rstrip('0').rstrip('.')
-                            break
-                        except:
-                            continue
-    
-    # تحليل الرسالة واستخراج المعلومات (للرسائل الأخرى غير المؤشر)
-    if message_text:
-        import re
-        
-        # تنظيف الرسالة من التفاصيل التقنية
-        cleaned_message = message_text
-        cleaned_message = re.sub(r'^[^:]*\([^)]+\):\s*', '', cleaned_message)
-        cleaned_message = re.sub(r'nagdat\s*\([^)]+\):\s*', '', cleaned_message, flags=re.IGNORECASE)
-        
-        message_upper = cleaned_message.upper()
-        
-        # ═══════════════════════════════════════════════════════════════
-        # استخراج المعلومات الأساسية أولاً
-        # ═══════════════════════════════════════════════════════════════
-        
-        # استخراج المركز أولاً للتحقق من الإغلاق
-        position_match = re.search(r'المركز[^ه]*هو\s*(-?\d+\.?\d*)', cleaned_message) or re.search(r'position[^i]*is\s*(-?\d+\.?\d*)', cleaned_message, re.IGNORECASE)
-        position = position_match.group(1) if position_match else None
-        
-        # استخراج نوع الأمر (buy/sell) من "تم تنفيذ الأمر"
-        action_match = re.search(r'تم\s+تنفيذ\s+الأمر\s+(\w+)', cleaned_message, re.IGNORECASE) or re.search(r'order\s+(\w+)', cleaned_message, re.IGNORECASE)
-        action = action_match.group(1).lower() if action_match else None
-        
-        # ═══════════════════════════════════════════════════════════════
-        # تحديد نوع الإشارة
-        # ═══════════════════════════════════════════════════════════════
-        
-        signal_category = None
-        signal_emoji = "📊"
-        signal_title = "Trading Alert"
-        
-        # تحقق من الإغلاق أولاً (المركز = 0)
-        if position:
-            try:
-                position_float = float(position)
-                if position_float == 0:
-                    signal_category = "CLOSE"
-                    signal_emoji = "🔒"
-                    signal_title = "إغلاق صفقة"
-            except:
-                pass
-        
-        # إذا لم يكن إغلاق، حدد نوع الصفقة
-        if not signal_category:
-            # 1. فتح صفقة BUY
-            if (action and action in ["buy", "long"]) or (any(word in message_upper for word in ["BUY", "LONG", "شراء"]) and not any(word in message_upper for word in ["CLOSE", "إغلاق", "TP", "SL"])):
-                signal_category = "ENTRY_BUY"
-                signal_emoji = "🟢"
-                signal_title = "إشارة شراء"
-            
-            # 2. فتح صفقة SELL
-            elif (action and action in ["sell", "short"]) or (any(word in message_upper for word in ["SELL", "SHORT", "بيع"]) and not any(word in message_upper for word in ["CLOSE", "إغلاق", "TP", "SL"])):
-                signal_category = "ENTRY_SELL"
-                signal_emoji = "🔴"
-                signal_title = "إشارة بيع"
-            
-            # 3. إغلاق صفقة (من الكلمات)
-            elif any(word in message_upper for word in ["CLOSE", "إغلاق", "EXIT"]):
-                signal_category = "CLOSE"
-                signal_emoji = "🔒"
-                signal_title = "إغلاق صفقة"
-        
-        # 4. هدف 1
-        if not signal_category and any(word in message_upper for word in ["TP1", "TARGET 1", "TAKE PROFIT 1", "الهدف 1", "هدف 1"]):
-            signal_category = "TP1"
-            signal_emoji = "🎯"
-            signal_title = "تحقيق الهدف الأول"
-        
-        # 5. هدف 2
-        if not signal_category and any(word in message_upper for word in ["TP2", "TARGET 2", "TAKE PROFIT 2", "الهدف 2", "هدف 2"]):
-            signal_category = "TP2"
-            signal_emoji = "🎯🎯"
-            signal_title = "تحقيق الهدف الثاني"
-        
-        # 6. هدف 3
-        if not signal_category and any(word in message_upper for word in ["TP3", "TARGET 3", "TAKE PROFIT 3", "الهدف 3", "هدف 3"]):
-            signal_category = "TP3"
-            signal_emoji = "🎯🎯🎯"
-            signal_title = "تحقيق الهدف الثالث"
-        
-        # 7. وقف خسارة
-        if not signal_category and any(word in message_upper for word in ["STOP LOSS", "SL", "STOPLOSS", "وقف الخسارة", "ستوب لوز"]):
-            signal_category = "STOP_LOSS"
-            signal_emoji = "🛑"
-            signal_title = "وقف الخسارة"
-        
-        # 8. هدف عام (TP بدون رقم)
-        if not signal_category and any(word in message_upper for word in ["TP", "TAKE PROFIT", "TARGET", "هدف"]):
-            signal_category = "TP"
-            signal_emoji = "🎯"
-            signal_title = "تحقيق هدف"
-        
-        # ═══════════════════════════════════════════════════════════════
-        # استخراج المعلومات
-        # ═══════════════════════════════════════════════════════════════
-        
-        # استخراج السعر بدقة من رسائل التنبيه
-        # أولوية 1: استخراج من نص رسالة المؤشر مباشرة (الأولوية الكاملة)
-        price = None
-        if message_text:
-            # البحث عن "💰 Entry Price: 123.45" أو "💰 Price: 123.45" أو "💰 Exit Price: 123.45"
-            price_patterns = [
-                r'💰\s*Entry\s+Price:\s*([\d.,]+)',  # Entry Price في BUY/SELL SIGNAL
-                r'💰\s*Price:\s*([\d.,]+)',          # Price في POSITION CLOSED و STOP LOSS
-                r'💰\s*Exit\s+Price:\s*([\d.,]+)',   # Exit Price في TP
-                r'Entry\s+Price:\s*([\d.,]+)',       # بدون emoji
-                r'Price:\s*([\d.,]+)',               # بدون emoji
-                r'Exit\s+Price:\s*([\d.,]+)'         # بدون emoji
-            ]
-            
-            for pattern in price_patterns:
-                price_match = re.search(pattern, message_text, re.IGNORECASE)
-                if price_match:
-                    price_raw = price_match.group(1).strip().replace(',', '')
-                    try:
-                        price_float = float(price_raw)
-                        if price_float >= 1:
-                            price = f"{price_float:,.4f}".rstrip('0').rstrip('.')
-                        else:
-                            price = f"{price_float:,.8f}".rstrip('0').rstrip('.')
-                        break  # وجدنا السعر من رسالة المؤشر، نتوقف
-                    except:
-                        continue
-        
-        # أولوية 2: احتياطي - البيانات من TradingView (فقط إذا لم نجد في رسالة المؤشر)
-        if not price and isinstance(data, dict):
-            raw_price = (data.get('close') or data.get('price') or data.get('Close') or 
-                        data.get('Price') or data.get('{{close}}') or data.get('close_price'))
-            
-            if raw_price:
-                try:
-                    price_float = float(raw_price)
-                    if price_float >= 1:
-                        price = f"{price_float:,.4f}".rstrip('0').rstrip('.')
-                    else:
-                        price = f"{price_float:.8f}".rstrip('0').rstrip('.')
-                except:
-                    price = None
-        
-        # أولوية 2: استخراج دقيق من نص الرسالة للمؤشر
-        if not price and message_text:
-            # البحث عن "💰 Entry Price: 123.45" أو "💰 Price: 123.45" أو "💰 Exit Price: 123.45"
-            # استخدام regex دقيق لاستخراج الرقم بعد النص
-            price_patterns = [
-                r'💰\s*Entry\s+Price:\s*([\d.,]+)',  # Entry Price في BUY/SELL SIGNAL
-                r'💰\s*Price:\s*([\d.,]+)',          # Price في POSITION CLOSED و STOP LOSS
-                r'💰\s*Exit\s+Price:\s*([\d.,]+)',   # Exit Price في TP
-                r'Entry\s+Price:\s*([\d.,]+)',       # بدون emoji
-                r'Price:\s*([\d.,]+)',               # بدون emoji
-                r'Exit\s+Price:\s*([\d.,]+)'         # بدون emoji
-            ]
-            
-            for pattern in price_patterns:
-                price_match = re.search(pattern, message_text, re.IGNORECASE)
-                if price_match:
-                    price_raw = price_match.group(1).strip().replace(',', '')
-                    try:
-                        price_float = float(price_raw)
-                        if price_float >= 1:
-                            price = f"{price_float:,.4f}".rstrip('0').rstrip('.')
-                        else:
-                            price = f"{price_float:.8f}".rstrip('0').rstrip('.')
-                        break  # وجدنا السعر من رسالة المؤشر، نتوقف
-                    except:
-                        continue
-        
-        # أولوية 2: احتياطي - البيانات من TradingView (فقط إذا لم نجد في رسالة المؤشر)
-        if not price and isinstance(data, dict):
-            raw_price = (data.get('close') or data.get('price') or data.get('Close') or 
-                        data.get('Price') or data.get('{{close}}') or data.get('close_price'))
-            
-            if raw_price:
-                try:
-                    price_float = float(raw_price)
-                    if price_float >= 1:
-                        price = f"{price_float:,.4f}".rstrip('0').rstrip('.')
-                    else:
-                        price = f"{price_float:,.8f}".rstrip('0').rstrip('.')
-                except:
-                    price = None
-        
-        # أولوية 3: استخراج من cleaned_message (للرسائل من Strategy - فقط إذا لم نجد في رسالة المؤشر)
-        if not price:
-            # استخراج السعر من بعد @ (للرسائل من Strategy)
-            price_match = re.search(r'@\s*([\d.,]+)', cleaned_message)
-            price_raw = price_match.group(1).replace(',', '') if price_match else None
-            
-            if price_raw:
-                try:
-                    price_float = float(price_raw)
-                    
-                    if signal_category == "CLOSE":
-                        # في حالة الإغلاق، نستخدم السعر من البيانات أولاً (إن وجد)
-                        if isinstance(data, dict) and (data.get('close') or data.get('{{close}}')):
-                            # السعر من TradingView - نستخدمه مباشرة
-                            if price_float >= 1:
-                                price = f"{price_float:,.4f}".rstrip('0').rstrip('.')
-                            else:
-                                price = f"{price_float:.8f}".rstrip('0').rstrip('.')
-                        else:
-                            # السعر من الرسالة - نستخدمه مباشرة
-                            # نتحقق من حجم المركز فقط لتجنب الخلط
-                            position_in_message = re.search(r'المركز[^ه]*هو\s*(-?\d+\.?\d*)', cleaned_message)
-                            if position_in_message:
-                                pos_val = float(position_in_message.group(1))
-                                # إذا كان السعر قريب جداً من حجم المركز (نفس القيمة تقريباً)، نتجاهله
-                                if abs(abs(price_float) - abs(pos_val)) < 0.01:
-                                    price = None
-                                else:
-                                    # السعر مختلف عن حجم المركز - نستخدمه
-                                    if price_float >= 1:
-                                        price = f"{price_float:,.4f}".rstrip('0').rstrip('.')
-                                    else:
-                                        price = f"{price_float:.8f}".rstrip('0').rstrip('.')
-                            else:
-                                # لا يوجد حجم مركز في الرسالة - نستخدم السعر مباشرة
-                                if price_float >= 1:
-                                    price = f"{price_float:,.4f}".rstrip('0').rstrip('.')
-                                else:
-                                    price = f"{price_float:.8f}".rstrip('0').rstrip('.')
-                    else:
-                        # في حالات ENTRY_BUY و ENTRY_SELL
-                        # ⚠️ مهم: ما بعد @ في رسائل Strategy هو حجم المركز وليس السعر!
-                        # لذلك نتجاهل ما بعد @ تماماً في حالة ENTRY
-                        # السعر الحقيقي يجب أن يأتي من {{close}} في البيانات أو لا نعرضه
-                        price = None  # نتجاهل ما بعد @ لأنه حجم مركز وليس السعر
-                except:
-                    pass
-        
-        # استخراج العملة (من "على SYMBOL" أو من نهاية الرسالة)
-        ticker_match = re.search(r'على\s+([A-Z0-9]+)', cleaned_message, re.IGNORECASE) or re.search(r'([A-Z]{2,}(?:USDT|BTC|ETH|BUSD|USD))', cleaned_message.upper())
-        ticker = ticker_match.group(1).upper() if ticker_match else None
-        
-        # استخراج الأهداف (TP1, TP2, TP3) - أولوية لرسالة المؤشر
-        tp1 = None
-        tp2 = None
-        tp3 = None
-        stop_loss = None
-        
-        # أولوية: استخراج من رسالة المؤشر مباشرة
-        if message_text:
-            # TP1 من رسالة المؤشر
-            tp1_match = re.search(r'🎯\s*TP1:\s*([^\n]+)', message_text, re.IGNORECASE) or re.search(r'TP1:\s*([^\n]+)', message_text, re.IGNORECASE)
-            if tp1_match:
-                tp1_text = tp1_match.group(1).strip()
-                # استخراج السعر فقط من TP1 (قد يكون بصيغة "123.45 (+0.5%)")
-                tp1_price_match = re.search(r'([\d.,]+)', tp1_text)
-                tp1 = tp1_price_match.group(1).replace(',', '') if tp1_price_match else tp1_text.split()[0] if tp1_text else None
-            
-            # TP2 من رسالة المؤشر
-            tp2_match = re.search(r'🎯\s*TP2:\s*([^\n]+)', message_text, re.IGNORECASE) or re.search(r'TP2:\s*([^\n]+)', message_text, re.IGNORECASE)
-            if tp2_match:
-                tp2_text = tp2_match.group(1).strip()
-                tp2_price_match = re.search(r'([\d.,]+)', tp2_text)
-                tp2 = tp2_price_match.group(1).replace(',', '') if tp2_price_match else tp2_text.split()[0] if tp2_text else None
-            
-            # TP3 من رسالة المؤشر
-            tp3_match = re.search(r'🎯\s*TP3:\s*([^\n]+)', message_text, re.IGNORECASE) or re.search(r'TP3:\s*([^\n]+)', message_text, re.IGNORECASE)
-            if tp3_match:
-                tp3_text = tp3_match.group(1).strip()
-                tp3_price_match = re.search(r'([\d.,]+)', tp3_text)
-                tp3 = tp3_price_match.group(1).replace(',', '') if tp3_price_match else tp3_text.split()[0] if tp3_text else None
-            
-            # Stop Loss من رسالة المؤشر
-            sl_match = re.search(r'🛑\s*Stop\s+Loss:\s*([^\n]+)', message_text, re.IGNORECASE) or re.search(r'Stop\s+Loss:\s*([^\n]+)', message_text, re.IGNORECASE) or re.search(r'SL:\s*([^\n]+)', message_text, re.IGNORECASE)
-            if sl_match:
-                sl_text = sl_match.group(1).strip()
-                sl_price_match = re.search(r'([\d.,]+)', sl_text)
-                stop_loss = sl_price_match.group(1).replace(',', '') if sl_price_match else sl_text.split()[0] if sl_text else None
-        
-        # احتياطي: استخراج من cleaned_message (للرسائل من Strategy)
-        if not tp1 and not tp2 and not tp3:
-            tp1_match = re.search(r'TP1[:\s]*@?\s*([\d.,]+)', cleaned_message, re.IGNORECASE)
-            tp2_match = re.search(r'TP2[:\s]*@?\s*([\d.,]+)', cleaned_message, re.IGNORECASE)
-            tp3_match = re.search(r'TP3[:\s]*@?\s*([\d.,]+)', cleaned_message, re.IGNORECASE)
-            
-            tp1 = tp1_match.group(1).replace(',', '') if tp1_match else None
-            tp2 = tp2_match.group(1).replace(',', '') if tp2_match else None
-            tp3 = tp3_match.group(1).replace(',', '') if tp3_match else None
-        
-        if not stop_loss:
-            sl_match = re.search(r'SL[:\s]*@?\s*([\d.,]+)', cleaned_message, re.IGNORECASE) or re.search(r'STOP\s*LOSS[:\s]*@?\s*([\d.,]+)', cleaned_message, re.IGNORECASE)
-            stop_loss = sl_match.group(1).replace(',', '') if sl_match else None
-        
-        # ═══════════════════════════════════════════════════════════════
-        # بناء الرسالة حسب نوع الإشارة
-        # ═══════════════════════════════════════════════════════════════
-        
-        formatted_msg = f"{signal_emoji} *{signal_title}*\n"
-        formatted_msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        
-        # معلومات أساسية
-        if ticker:
-            formatted_msg += f"💰 *العملة:* `{ticker}`\n"
-        
-        # عرض السعر فقط إذا كان موجوداً وصحيحاً
-        # في حالة ENTRY_BUY/ENTRY_SELL، نعرض السعر فقط إذا كان من البيانات ({{close}})
-        if price:
-            try:
-                price_float = float(price)
-                formatted_price = f"{price_float:,.4f}".rstrip('0').rstrip('.')
-                formatted_msg += f"💵 *السعر:* `{formatted_price}`\n"
-            except:
-                formatted_msg += f"💵 *السعر:* `{price}`\n"
-        # إذا لم يكن هناك سعر (خصوصاً في ENTRY)، لا نعرضه بدلاً من عرض حجم المركز
-        
-        # رسائل مخصصة حسب نوع الإشارة
-        if signal_category == "ENTRY_BUY":
-            formatted_msg += f"\n🟢 *نوع الصفقة:* شراء (LONG)\n"
-            if tp1 or tp2 or tp3:
-                formatted_msg += f"\n📍 *الأهداف:*\n"
-                if tp1:
-                    formatted_msg += f"   🎯 TP1: `{tp1}`\n"
-                if tp2:
-                    formatted_msg += f"   🎯 TP2: `{tp2}`\n"
-                if tp3:
-                    formatted_msg += f"   🎯 TP3: `{tp3}`\n"
-            if stop_loss:
-                formatted_msg += f"\n🛑 *وقف الخسارة:* `{stop_loss}`\n"
-        
-        elif signal_category == "ENTRY_SELL":
-            formatted_msg += f"\n🔴 *نوع الصفقة:* بيع (SHORT)\n"
-            if tp1 or tp2 or tp3:
-                formatted_msg += f"\n📍 *الأهداف:*\n"
-                if tp1:
-                    formatted_msg += f"   🎯 TP1: `{tp1}`\n"
-                if tp2:
-                    formatted_msg += f"   🎯 TP2: `{tp2}`\n"
-                if tp3:
-                    formatted_msg += f"   🎯 TP3: `{tp3}`\n"
-            if stop_loss:
-                formatted_msg += f"\n🛑 *وقف الخسارة:* `{stop_loss}`\n"
-        
-        elif signal_category == "CLOSE":
-            formatted_msg += f"\n🔒 *تم إغلاق الصفقة*\n"
-            if position and float(position) == 0:
-                formatted_msg += f"✅ *المركز الحالي:* صفر (تم الإغلاق بالكامل)\n"
-            
-            # تحديد نوع الصفقة المغلقة (SHORT/LONG)
-            # نحاول استخراجه من حجم المركز في الرسالة السابقة أو من البيانات
-            position_type = None
-            
-            # 1. محاولة من action (buy/sell)
-            if action:
-                if action in ["sell", "short"]:
-                    position_type = "SHORT"
-                elif action in ["buy", "long"]:
-                    position_type = "LONG"
-            
-            # 2. محاولة من حجم المركز إذا كان متوفراً في البيانات
-            if not position_type and isinstance(data, dict):
-                position_size = data.get('position_size') or data.get('strategy.position_size') or data.get('{{strategy.position_size}}')
-                if position_size:
-                    try:
-                        pos_float = float(position_size)
-                        # إذا كان المركز سالب، كان SHORT
-                        # لكن في حالة الإغلاق، المركز = 0، لذا نحتاج بيانات سابقة
-                        # يمكننا البحث في الرسالة عن إشارات سابقة
-                    except:
-                        pass
-            
-            # 3. البحث في الرسالة عن حجم المركز السابق (قبل الإغلاق)
-            if not position_type:
-                # البحث عن "المركز الجديدة" أو "المركز" مع رقم سالب أو موجب
-                # في رسائل الإغلاق، عادة يكون هناك ذكر للصفقة السابقة
-                prev_pos_match = re.search(r'المركز[^ه]*هو\s*(-?\d+\.?\d*)', cleaned_message)
-                # لكن في حالة الإغلاق، المركز الحالي = 0
-                # لذا نحتاج البحث عن إشارات سابقة في نفس الرسالة
-                
-                # البحث عن كلمات تشير لنوع الصفقة السابقة
-                # إذا كانت هناك كلمة "بيع" أو "sell" قبل "إغلاق"، كانت SHORT
-                # إذا كانت هناك كلمة "شراء" أو "buy" قبل "إغلاق"، كانت LONG
-                
-                # البحث عن آخر إشارة قبل الإغلاق
-                message_before_close = cleaned_message.split("إغلاق")[0] if "إغلاق" in cleaned_message else cleaned_message.split("CLOSE")[0] if "CLOSE" in cleaned_message.upper() else cleaned_message
-                
-                if any(word in message_before_close.upper() for word in ["SELL", "SHORT", "بيع"]):
-                    position_type = "SHORT"
-                elif any(word in message_before_close.upper() for word in ["BUY", "LONG", "شراء"]):
-                    position_type = "LONG"
-            
-            # 4. إذا كان السعر المستخرج يبدو أنه حجم مركز (رقم كبير جداً)،
-            # يمكننا استخدام ذلك لتحديد نوع الصفقة
-            # لكن هذا ليس موثوقاً
-            
-            if position_type:
-                position_type_arabic = "شورت" if position_type == "SHORT" else "لونج"
-                formatted_msg += f"📌 *نوع الصفقة:* إغلاق صفقة {position_type_arabic} ({position_type})\n"
-        
-        elif signal_category in ["TP1", "TP2", "TP3"]:
-            tp_number = signal_category[-1]
-            formatted_msg += f"\n🎉 *تهانينا! تم تحقيق الهدف {tp_number}*\n"
-        
-        elif signal_category == "STOP_LOSS":
-            formatted_msg += f"\n🛑 *للأسف، تم ضرب وقف الخسارة*\n"
-            formatted_msg += f"⚠️ *يُنصح بمراجعة الاستراتيجية*\n"
-        
-        # معلومات إضافية
-        if position is not None and signal_category not in ["TP1", "TP2", "TP3", "STOP_LOSS", "CLOSE"]:
-            try:
-                position_float = float(position)
-                if abs(position_float) < 0.0001:  # إذا كان قريب من الصفر
-                    formatted_msg += f"\n📊 *المركز:* لا يوجد\n"
-                else:
-                    formatted_msg += f"\n📊 *حجم المركز:* `{position_float}`\n"
-            except:
-                pass
-        
-        # الوقت
-        formatted_msg += f"\n⏰ *الوقت:* `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`\n"
-        formatted_msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        
-        return formatted_msg
-    
-    # إذا لم يتم تحليل الرسالة، أرسلها كما هي
-    if message_text:
-        return f"🔔 *تنبيه*\n\n{message_text}\n\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-    else:
-        return f"🔔 *تنبيه ورد*\n\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+# Validate configuration on startup
+try:
+    validate_config()
+    logger.info("Configuration validated successfully")
+except ValueError as e:
+    logger.error(f"Configuration error: {e}")
+    raise
 
 
 @app.route('/', methods=['GET'])
-def home():
-    """الصفحة الرئيسية"""
-    webhook_url = f"{PROJECT_URL}/personal/{TELEGRAM_CHAT_ID}/webhook"
+def health_check():
+    """Health check endpoint"""
     return jsonify({
-        "service": "TradingView to Telegram Bot",
-        "status": "running",
-        "webhook_url": webhook_url
+        "status": "ok",
+        "message": "TradingView Webhook to Telegram Bot is running"
     }), 200
 
 
-@app.route('/personal/<chat_id>/webhook', methods=['POST', 'GET'])
-def personal_webhook(chat_id):
-    """استقبال التنبيهات من TradingView"""
-    # التحقق من chat_id
-    if str(chat_id) != str(TELEGRAM_CHAT_ID):
-        return jsonify({
-            "status": "error",
-            "message": "Invalid chat ID"
-        }), 403
-
-    if request.method == 'GET':
-        return jsonify({
-            "status": "online",
-            "message": "Webhook is ready"
-        }), 200
-
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    """
+    Main webhook endpoint to receive signals from TradingView
+    
+    Expected JSON format:
+    {
+        "signal": "BUY" | "SELL" | "TP1_HIT" | "TP2_HIT" | "TP3_HIT" | "STOP_LOSS" | "CLOSE",
+        "symbol": "BTCUSDT",
+        "entry_price": 42850.50,
+        "tp1": 43300.75,
+        "tp2": 43750.25,
+        "tp3": 44200.50,
+        "stop_loss": 42150.00,
+        "time": "2024-01-15 14:30",
+        "timeframe": "15m",
+        ...
+    }
+    """
     try:
-        print(f"📥 Webhook request received!")
-        print(f"   Method: {request.method}")
-        print(f"   Content-Type: {request.headers.get('Content-Type', 'N/A')}")
-        print(f"   URL: {request.url}")
-        
-        # استقبال البيانات
-        data = {}
-        content_type = request.headers.get('Content-Type', '').lower()
-        
-        if 'application/json' in content_type:
-            data = request.get_json() or {}
-            print(f"   ✅ Got JSON data: {data}")
-        else:
-            form_data = dict(request.form)
-            if form_data:
-                data = form_data
-                print(f"   ✅ Got form data: {data}")
-            else:
-                raw_data = request.get_data(as_text=True)
-                print(f"   📝 Raw data: {raw_data[:200] if raw_data else 'Empty'}")
-                if raw_data:
-                    try:
-                        data = json.loads(raw_data)
-                        print(f"   ✅ Parsed JSON from raw: {data}")
-                    except:
-                        data = {"message": raw_data}
-                        print(f"   ✅ Using raw data as message")
+        # Get JSON data from request
+        data = request.get_json()
         
         if not data:
-            data = {"message": "تنبيه ورد بدون بيانات"}
-            print(f"   ⚠️ No data found, using default")
+            logger.warning("Received empty request")
+            return jsonify({"error": "No data received"}), 400
         
-        print(f"   📊 Final data: {data}")
+        # Get signal type
+        signal = data.get('signal', '').upper()
         
-        # تحويل البيانات إلى رسالة
-        message = format_trading_alert(data)
+        logger.info(f"Received signal: {signal} for {data.get('symbol', 'N/A')}")
         
-        # إذا كانت الرسالة None (تم تجاهلها)، لا نرسل شيئاً
-        if message is None:
-            print(f"   ⏭️ Message ignored (POSITION CLOSED from indicator)")
-            return jsonify({
-                "status": "ignored",
-                "message": "Message ignored - POSITION CLOSED from indicator"
-            }), 200
+        # Route to appropriate formatter based on signal type
+        message = None
         
-        print(f"   📝 Formatted message length: {len(message)} chars")
-        
-        # إرسال الرسالة إلى Telegram
-        print(f"   📤 Sending to Telegram (Chat ID: {TELEGRAM_CHAT_ID})...")
-        if send_telegram_message(message):
-            print(f"   ✅ Alert sent successfully!")
-            return jsonify({
-                "status": "success",
-                "message": "Alert sent to Telegram successfully"
-            }), 200
+        if signal == 'BUY':
+            message = format_buy_signal(data)
+        elif signal == 'SELL':
+            message = format_sell_signal(data)
+        elif signal == 'TP1_HIT' or signal == 'TP1':
+            message = format_tp1_hit(data)
+        elif signal == 'TP2_HIT' or signal == 'TP2':
+            message = format_tp2_hit(data)
+        elif signal == 'TP3_HIT' or signal == 'TP3':
+            message = format_tp3_hit(data)
+        elif signal == 'STOP_LOSS' or signal == 'SL':
+            message = format_stop_loss_hit(data)
+        elif signal == 'CLOSE' or signal == 'POSITION_CLOSED':
+            message = format_position_closed(data)
         else:
-            print(f"   ❌ Failed to send to Telegram")
+            logger.warning(f"Unknown signal type: {signal}")
+            return jsonify({"error": f"Unknown signal type: {signal}"}), 400
+        
+        # Send message to Telegram
+        if message:
+            success = send_message(message)
+            if success:
+                logger.info(f"Successfully sent {signal} signal to Telegram")
+                return jsonify({
+                    "status": "success",
+                    "message": "Signal sent to Telegram"
+                }), 200
+            else:
+                logger.error(f"Failed to send {signal} signal to Telegram")
+                return jsonify({
+                    "status": "error",
+                    "message": "Failed to send message to Telegram"
+                }), 500
+        else:
+            logger.error("Failed to format message")
             return jsonify({
                 "status": "error",
-                "message": "Failed to send to Telegram"
+                "message": "Failed to format message"
             }), 500
             
     except Exception as e:
-        print(f"   ❌ Exception: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error processing webhook: {e}", exc_info=True)
         return jsonify({
             "status": "error",
             "message": str(e)
         }), 500
 
 
-@app.route('/webhook', methods=['POST', 'GET'])
-def webhook():
-    """استقبال التنبيهات (endpoint قديم للتوافق)"""
-    return personal_webhook(TELEGRAM_CHAT_ID)
+@app.errorhandler(404)
+def not_found(error):
+    """Handle 404 errors"""
+    return jsonify({"error": "Endpoint not found"}), 404
 
 
-@app.route('/test-alert', methods=['GET', 'POST'])
-def test_alert():
-    """اختبار إرسال إشارة"""
-    test_data = {
-        "message": "nagdat (Trailing, Open/Close, No Filtering, 7, 45, 10, 2, 10, 50, 30, 20, 10): تم تنفيذ الأمر sell @ 55556.723 على SCRUSDT. المركز الجديدة للإستراتيجية هو -55556.723"
-    }
-    
-    # استخدام نفس منطق personal_webhook
-    message = format_trading_alert(test_data)
-    
-    if send_telegram_message(message):
-        return jsonify({
-            "status": "success",
-            "message": "Test alert sent successfully!",
-            "test_data": test_data,
-            "formatted_message": message
-        }), 200
-    else:
-        return jsonify({
-            "status": "error",
-            "message": "Failed to send test alert"
-        }), 500
-
-
-def send_welcome_message():
-    """إرسال رسالة الترحيب عند البدء"""
-    global _welcome_sent
-    
-    if _welcome_sent:
-        return
-    
-    try:
-        # انتظر قليلاً لضمان أن gunicorn جاهز
-        time.sleep(3)
-        
-        if not _welcome_sent:
-            webhook_url = f"{PROJECT_URL}/personal/{TELEGRAM_CHAT_ID}/webhook"
-            welcome_msg = f"✅ *البوت يعمل الآن*\n\n🔗 *رابط Webhook:*\n`{webhook_url}`\n\n📋 *انسخ الرابط وضعه في TradingView*"
-            
-            if send_telegram_message(welcome_msg):
-                print(f"✅ Welcome message sent with URL: {webhook_url}")
-                _welcome_sent = True
-            else:
-                print(f"⚠️ Failed to send welcome message")
-    except Exception as e:
-        print(f"❌ Error sending welcome message: {e}")
-
-
-# إرسال رسالة الترحيب عند بدء التطبيق
-welcome_thread = threading.Thread(target=send_welcome_message, daemon=True)
-welcome_thread.start()
-
-# أيضاً عند أول طلب HTTP (كنسخة احتياطية)
-@app.before_request
-def before_first_request():
-    """إرسال رسالة الترحيب عند أول طلب HTTP (نسخة احتياطية)"""
-    global _welcome_sent
-    
-    if not _welcome_sent:
-        try:
-            webhook_url = f"{PROJECT_URL}/personal/{TELEGRAM_CHAT_ID}/webhook"
-            welcome_msg = f"✅ *البوت يعمل الآن*\n\n🔗 *رابط Webhook:*\n`{webhook_url}`\n\n📋 *انسخ الرابط وضعه في TradingView*"
-            
-            if send_telegram_message(welcome_msg):
-                print(f"✅ Welcome message sent with URL: {webhook_url}")
-            
-            _welcome_sent = True
-        except Exception as e:
-            print(f"❌ Error sending welcome message: {e}")
-            _welcome_sent = True
+@app.errorhandler(500)
+def internal_error(error):
+    """Handle 500 errors"""
+    return jsonify({"error": "Internal server error"}), 500
 
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    # Run the Flask app
+    # In production, use gunicorn: gunicorn main:app
+    app.run(
+        host='0.0.0.0',
+        port=WEBHOOK_PORT,
+        debug=DEBUG
+    )
 
