@@ -103,33 +103,55 @@ def webhook(chat_id=None):
         logger.info(f"Headers: {dict(request.headers)}")
         logger.info(f"URL: {request.url}")
         logger.info(f"Chat ID from URL: {chat_id}")
+        logger.info(f"Content-Type: {request.headers.get('Content-Type', 'Not specified')}")
         
-        # Get JSON data from request
-        data = request.get_json()
+        data = None
         
-        # Also try to get data from form data (some webhooks send form data)
+        # Try to get data - TradingView sends as text/plain, not application/json
+        # Method 1: Try to get raw data first (for text/plain content type)
+        try:
+            raw_data = request.get_data(as_text=True)
+            logger.info(f"Raw data received: {raw_data}")
+            if raw_data:
+                import json
+                data = json.loads(raw_data)
+                logger.info("Successfully parsed JSON from raw data")
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse raw data as JSON: {e}")
+            # Try to parse as form data
+            try:
+                data = request.form.to_dict()
+                logger.info("Parsed as form data instead")
+            except:
+                pass
+        except Exception as e:
+            logger.warning(f"Error reading raw data: {e}")
+        
+        # Method 2: Try to get JSON (if Content-Type is application/json)
+        if not data:
+            try:
+                if request.is_json:
+                    data = request.get_json(force=False)
+                    logger.info("Successfully parsed JSON from request.get_json()")
+            except Exception as e:
+                logger.warning(f"Failed to get JSON: {e}")
+        
+        # Method 3: Try form data
         if not data:
             try:
                 data = request.form.to_dict()
-                logger.info("Received form data instead of JSON")
-            except:
-                pass
-        
-        # Also try raw data
-        if not data:
-            try:
-                raw_data = request.get_data(as_text=True)
-                logger.info(f"Raw data received: {raw_data}")
-                import json
-                data = json.loads(raw_data)
-            except:
-                pass
+                if data:
+                    logger.info("Parsed as form data")
+            except Exception as e:
+                logger.warning(f"Failed to get form data: {e}")
         
         if not data:
             logger.warning("Received empty request - no JSON, form, or raw data")
+            raw_data_preview = request.get_data(as_text=True)[:200] if request.get_data() else "No data"
             return jsonify({
                 "error": "No data received",
-                "message": "Please send JSON data in the request body"
+                "message": "Please send JSON data in the request body",
+                "raw_data_preview": raw_data_preview
             }), 400
         
         logger.info(f"Received data: {data}")
