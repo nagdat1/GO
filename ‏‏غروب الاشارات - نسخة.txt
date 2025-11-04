@@ -18,27 +18,13 @@ strategy(
   max_bars_back           = 5000,
   initial_capital         = 5000,
   commission_type         = strategy.commission.percent,
-  commission_value        = 0.02,
-  fill_orders_on_standard_ohlc = true
+  commission_value        = 0.02
   )
 
 //Truncate Function
 truncate(number, decimals) =>
     factor = math.pow(10, decimals)
     int(number * factor) / factor
-
-// Format Time Function - Convert timestamp to "yyyy-MM-dd HH:mm" format
-f_formatTime(_time) =>
-    _year = str.tostring(year(_time))
-    _month = str.tostring(month(_time))
-    _month := str.length(_month) == 1 ? "0" + _month : _month
-    _day = str.tostring(dayofmonth(_time))
-    _day := str.length(_day) == 1 ? "0" + _day : _day
-    _hour = str.tostring(hour(_time))
-    _hour := str.length(_hour) == 1 ? "0" + _hour : _hour
-    _minute = str.tostring(minute(_time))
-    _minute := str.length(_minute) == 1 ? "0" + _minute : _minute
-    _year + "-" + _month + "-" + _day + " " + _hour + ":" + _minute
 
 //
 // === INPUTS ===
@@ -61,7 +47,7 @@ almaRibbon = input(false, title='Enable Ribbon?')
 green100 = #008000FF
 lime100 = #00FF00FF
 red100 = #FF0000FF
-blue100 = color.rgb(0, 217, 255)
+blue100 = #0000FFFF
 aqua100 = #00FFFFFF
 darkred100 = #8B0000FF
 gray100 = #808080FF
@@ -93,24 +79,11 @@ useSource = close //input.string('Close',   'What Source to be used?', options =
 // ═══════════════════════════════════════════════════════════════════════════
 // 📅 إعدادات فترة الباك تيست - Backtesting Date Range Settings
 // ═══════════════════════════════════════════════════════════════════════════
-// خيار التاريخ التلقائي (قبل شهر) - مفعّل افتراضياً
-useAutoStartDate = input.bool(true, "🔄 تاريخ بدء تلقائي (قبل شهر)", group="📅 فترة الباك تيست (Backtesting Date Range)", tooltip="عند التفعيل، سيبدأ الباك تيست تلقائياً من قبل شهر من التاريخ الحالي")
-
-// حساب تاريخ البدء التلقائي (قبل شهر من الآن)
-oneMonthInMillis = 30 * 24 * 60 * 60 * 1000  // تقريباً 30 يوم بالميلي ثانية
-autoStartDate = timenow - oneMonthInMillis
-
-// التاريخ اليدوي الأصلي
-manualStartDate = input.time(timestamp("01 Jan 2023 00:00 +0300"), "📅 تاريخ البداية اليدوي", group="📅 فترة الباك تيست (Backtesting Date Range)", tooltip="تاريخ بداية الباك تيست (يُستخدم فقط عند إلغاء تفعيل التاريخ التلقائي)")
-
-// اختيار التاريخ المناسب حسب الخيار المفعل
-fromDate = useAutoStartDate ? autoStartDate : manualStartDate
-
-toDate = input.time(timestamp("31 Dec 2099 00:00 +0300"), "📅 تاريخ النهاية", group="📅 فترة الباك تيست (Backtesting Date Range)", tooltip="تاريخ نهاية الباك تيست")
+enableFilter = input.bool(true,  "تفعيل تحديد فترة الباك تيست", group="📅 فترة الباك تيست (Backtesting Date Range)", tooltip="فعّل هذا الخيار لتحديد فترة معينة للباك تيست")
+fromDate     = input.time(timestamp("01 Jan 2023 00:00 +0300"), "تاريخ البداية (Start Date)", group="📅 فترة الباك تيست (Backtesting Date Range)", tooltip="تاريخ بداية الباك تيست")
+toDate       = input.time(timestamp("31 Dec 2099 00:00 +0300"), "تاريخ النهاية (End Date)", group="📅 فترة الباك تيست (Backtesting Date Range)", tooltip="تاريخ نهاية الباك تيست")
 
 // التحقق من أن التاريخ الحالي ضمن الفترة المحددة
-// عند استخدام التاريخ التلقائي، يتم تطبيق الفلتر تلقائياً
-enableFilter = useAutoStartDate ? true : input.bool(false, "تفعيل فلتر التاريخ اليدوي", group="📅 فترة الباك تيست (Backtesting Date Range)", tooltip="فعّل هذا الخيار لتطبيق التاريخ اليدوي")
 tradeDateIsAllowed = not enableFilter or (time >= fromDate and time <= toDate)
 
 filter1 = 'Filter with Atr'
@@ -232,14 +205,15 @@ fill(p11, p22, color=color.new(trendColour, 50), title="RENKO_fill")
 lxTrigger    = false
 sxTrigger    = false
 
+// === /ALERT conditions.
 buy = buy_entry //ta.crossover(closeSeriesAlt, openSeriesAlt)
 sell = sel_entry //ta.crossunder(closeSeriesAlt, openSeriesAlt)
 
-// Track previous state to prevent duplicate signals
+// Track previous state to prevent duplicate alerts
 var bool prevBuyTrigger = false
 var bool prevSellTrigger = false
 
-// Only trigger on new signals (not repainting) - يمنع تكرار الإشارات
+// Only trigger on new signals (not repainting) - يمنع تكرار التنبيهات
 buySignal = buy and not buy[1] and not prevBuyTrigger
 sellSignal = sell and not sell[1] and not prevSellTrigger
 
@@ -274,34 +248,6 @@ plotshape(wasShort, color = color.yellow)
 //plotshape(almaRibbon ? buy : na,  title = "Buy",  text = 'Buy',  style = shape.labelup,   location = location.belowbar, color= #39ff14, textcolor = #FFFFFF, size = size.tiny)
 //plotshape(almaRibbon ? sell : na, title = "Exit", text = 'Exit', style = shape.labeldown, location = location.abovebar, color= #ff1100, textcolor = #FFFFFF, size = size.tiny)
 
-// تتبع عدد صفقات الشراء والبيع والصفقات الرابحة
-var int longTradesCount = 0
-var int shortTradesCount = 0
-var int longWinTradesCount = 0
-var int shortWinTradesCount = 0
-var int prevWinTrades = 0
-var bool wasInLongPosition = false
-var bool wasInShortPosition = false
-
-// تتبع الصفقات الرابحة
-if strategy.wintrades > prevWinTrades
-    if wasInLongPosition
-        longWinTradesCount := longWinTradesCount + 1
-    if wasInShortPosition
-        shortWinTradesCount := shortWinTradesCount + 1
-    prevWinTrades := strategy.wintrades
-
-// تتبع نوع المركز الحالي
-if strategy.position_size > 0
-    wasInLongPosition := true
-    wasInShortPosition := false
-else if strategy.position_size < 0
-    wasInShortPosition := true
-    wasInLongPosition := false
-else
-    wasInLongPosition := false
-    wasInShortPosition := false
-
 // === STRATEGY ===
 // Entries and Exits with TP/SL
 
@@ -311,47 +257,26 @@ if buySignal and TPSType == "Trailing" and tradeDateIsAllowed
     // Close Short position if exists
     if strategy.position_size < 0
         strategy.close("Short")
-        // إرسال تنبيه إغلاق مركز SHORT
-        jsonCloseShortTrailing = '{"signal":"CLOSE","symbol":"' + syminfo.ticker + '","price":' + str.tostring(close, "#.##") + ',"time":"' + f_formatTime(time) + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '","mode":"Trailing"}'
-        alert(jsonCloseShortTrailing, alert.freq_once_per_bar)
     // Open Long position
     if strategy.position_size <= 0
         strategy.entry("Long" , strategy.long)
-        longTradesCount := longTradesCount + 1
-        // إرسال تنبيه فتح مركز BUY
-        jsonBuyTrailing = '{"signal":"BUY","symbol":"' + syminfo.ticker + '","entry_price":' + str.tostring(close, "#.##") + ',"time":"' + f_formatTime(time) + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '","mode":"Trailing"}'
-        alert(jsonBuyTrailing, alert.freq_once_per_bar)
 
 if sellSignal and TPSType == "Trailing" and tradeDateIsAllowed
     // Close Long position if exists
     if strategy.position_size > 0
         strategy.close("Long")
-        // إرسال تنبيه إغلاق مركز LONG
-        jsonCloseLongTrailing = '{"signal":"CLOSE","symbol":"' + syminfo.ticker + '","price":' + str.tostring(close, "#.##") + ',"time":"' + f_formatTime(time) + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '","mode":"Trailing"}'
-        alert(jsonCloseLongTrailing, alert.freq_once_per_bar)
     // Open Short position
     if strategy.position_size >= 0
         strategy.entry("Short" , strategy.short)
-        shortTradesCount := shortTradesCount + 1
-        // إرسال تنبيه فتح مركز SELL
-        jsonSellTrailing = '{"signal":"SELL","symbol":"' + syminfo.ticker + '","entry_price":' + str.tostring(close, "#.##") + ',"time":"' + f_formatTime(time) + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '","mode":"Trailing"}'
-        alert(jsonSellTrailing, alert.freq_once_per_bar)
 
 //tradeType - Options Mode
 if buySignal and TPSType == "Options" and tradeDateIsAllowed
     if strategy.position_size <= 0
-        strategy.entry("Long" , strategy.long)
-        longTradesCount := longTradesCount + 1
-        // إرسال تنبيه فتح مركز BUY
-        jsonBuyOptions = '{"signal":"BUY","symbol":"' + syminfo.ticker + '","entry_price":' + str.tostring(close, "#.##") + ',"time":"' + f_formatTime(time) + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '","mode":"Options"}'
-        alert(jsonBuyOptions, alert.freq_once_per_bar)
+        strategy.entry("Long" , strategy.long)    
 
 if sellSignal and TPSType == "Options" and tradeDateIsAllowed
     if strategy.position_size > 0
         strategy.close("Long")
-        // إرسال تنبيه إغلاق مركز LONG
-        jsonCloseOptions = '{"signal":"CLOSE","symbol":"' + syminfo.ticker + '","price":' + str.tostring(close, "#.##") + ',"time":"' + f_formatTime(time) + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '","mode":"Options"}'
-        alert(jsonCloseOptions, alert.freq_once_per_bar)
 
 
 G_RISK       = '■ ' + 'Risk Management'
@@ -412,7 +337,21 @@ i_src        = close
 
 G_DISPLAY    = 'Display'
 //<display>
+i_alertOn    = true //input.bool       (true,      'Alert Labels On/Off'          , group = G_DISPLAY)
 i_barColOn   = true //input.bool       (true,      'Bar Color On/Off'             , group = G_DISPLAY)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🔔 إعدادات رسائل التنبيهات - Alert Messages Settings
+// ═══════════════════════════════════════════════════════════════════════════
+G_ALERTS_MSG = '■ ' + 'Alert Messages (Webhook)'
+// المتغيرات: {{ticker}} سيتم استبدالها برمز السهم، {{percentage}} للـ TP
+i_msgBuy     = input.string('{"signal": "buy", "symbol": "{{ticker}}", "id": "STRATEGY_001"}', title='🟢 رسالة الشراء (Long Entry)', group=G_ALERTS_MSG)
+i_msgSell    = input.string('{"signal": "sell", "symbol": "{{ticker}}", "id": "STRATEGY_001"}', title='🔴 رسالة البيع (Short Entry)', group=G_ALERTS_MSG)
+i_msgTP1     = input.string('{"signal": "partial_close", "symbol": "{{ticker}}", "percentage": 50, "id": "STRATEGY_001"}', title='🎯 رسالة TP1', group=G_ALERTS_MSG)
+i_msgTP2     = input.string('{"signal": "partial_close", "symbol": "{{ticker}}", "percentage": 30, "id": "STRATEGY_001"}', title='🎯 رسالة TP2', group=G_ALERTS_MSG)
+i_msgTP3     = input.string('{"signal": "partial_close", "symbol": "{{ticker}}", "percentage": 20, "id": "STRATEGY_001"}', title='🎯 رسالة TP3', group=G_ALERTS_MSG)
+i_msgSL      = input.string('{"signal": "close", "symbol": "{{ticker}}", "id": "STRATEGY_001"}', title='🛑 رسالة Stop Loss', group=G_ALERTS_MSG)
+i_msgClose   = input.string('{"signal": "close", "symbol": "{{ticker}}", "id": "STRATEGY_001"}', title='⚪ رسالة الإغلاق (Close)', group=G_ALERTS_MSG)
 
 // ——————————— <function_declarations>
 // @function        Calculate the Take Profit line, and the crossover or crossunder
@@ -484,76 +423,82 @@ shortTP2     = tp2Short  and condition[1] == -1.1 and condition == -1.2
 longTP1      = tp1Long   and condition[1] ==  1.0 and condition ==  1.1
 shortTP1     = tp1Short  and condition[1] == -1.0 and condition == -1.1
 
-// إرسال تنبيهات TP1, TP2, TP3, و Stop Loss للوضع ATR
-if longTP1 and TPSType == "ATR" and tradeDateIsAllowed
-    jsonTP1Long = '{"signal":"TP1","symbol":"' + syminfo.ticker + '","price":' + str.tostring(tp1Line, "#.##") + ',"entry_price":' + str.tostring(entryLine, "#.##") + ',"time":"' + f_formatTime(time) + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '","mode":"ATR"}'
-    alert(jsonTP1Long, alert.freq_once_per_bar)
-
-if longTP2 and TPSType == "ATR" and tradeDateIsAllowed
-    jsonTP2Long = '{"signal":"TP2","symbol":"' + syminfo.ticker + '","price":' + str.tostring(tp2Line, "#.##") + ',"entry_price":' + str.tostring(entryLine, "#.##") + ',"time":"' + f_formatTime(time) + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '","mode":"ATR"}'
-    alert(jsonTP2Long, alert.freq_once_per_bar)
-
-if longTP3 and TPSType == "ATR" and tradeDateIsAllowed
-    jsonTP3Long = '{"signal":"TP3","symbol":"' + syminfo.ticker + '","price":' + str.tostring(tp3Line, "#.##") + ',"entry_price":' + str.tostring(entryLine, "#.##") + ',"time":"' + f_formatTime(time) + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '","mode":"ATR"}'
-    alert(jsonTP3Long, alert.freq_once_per_bar)
-
-if longSL and TPSType == "ATR" and tradeDateIsAllowed
-    jsonSLLong = '{"signal":"SL","symbol":"' + syminfo.ticker + '","price":' + str.tostring(slLine, "#.##") + ',"entry_price":' + str.tostring(entryLine, "#.##") + ',"time":"' + f_formatTime(time) + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '","mode":"ATR"}'
-    alert(jsonSLLong, alert.freq_once_per_bar)
-
-if shortTP1 and TPSType == "ATR" and tradeDateIsAllowed
-    jsonTP1Short = '{"signal":"TP1","symbol":"' + syminfo.ticker + '","price":' + str.tostring(tp1Line, "#.##") + ',"entry_price":' + str.tostring(entryLine, "#.##") + ',"time":"' + f_formatTime(time) + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '","mode":"ATR"}'
-    alert(jsonTP1Short, alert.freq_once_per_bar)
-
-if shortTP2 and TPSType == "ATR" and tradeDateIsAllowed
-    jsonTP2Short = '{"signal":"TP2","symbol":"' + syminfo.ticker + '","price":' + str.tostring(tp2Line, "#.##") + ',"entry_price":' + str.tostring(entryLine, "#.##") + ',"time":"' + f_formatTime(time) + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '","mode":"ATR"}'
-    alert(jsonTP2Short, alert.freq_once_per_bar)
-
-if shortTP3 and TPSType == "ATR" and tradeDateIsAllowed
-    jsonTP3Short = '{"signal":"TP3","symbol":"' + syminfo.ticker + '","price":' + str.tostring(tp3Line, "#.##") + ',"entry_price":' + str.tostring(entryLine, "#.##") + ',"time":"' + f_formatTime(time) + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '","mode":"ATR"}'
-    alert(jsonTP3Short, alert.freq_once_per_bar)
-
-if shortSL and TPSType == "ATR" and tradeDateIsAllowed
-    jsonSLShort = '{"signal":"SL","symbol":"' + syminfo.ticker + '","price":' + str.tostring(slLine, "#.##") + ',"entry_price":' + str.tostring(entryLine, "#.##") + ',"time":"' + f_formatTime(time) + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '","mode":"ATR"}'
-    alert(jsonSLShort, alert.freq_once_per_bar)
+// ═══════════════════════════════════════════════════════════════════════════
+// ⚠️ ملاحظة مهمة: alertcondition() لا تعمل مع strategy() في Pine Script
+// ═══════════════════════════════════════════════════════════════════════════
+// للحصول على شروط منفصلة في Create Alert:
+// 1. استخدم ملف "ALGOX_Alerts.pine" المنفصل (indicator)
+// 2. أضف المؤشر مع الاستراتيجية على نفس الرسم البياني
+// 3. أنشئ التنبيهات من المؤشر "ALGOX Alerts" وليس من الاستراتيجية
+// 4. تأكد من تطابق الإعدادات بين الاستراتيجية والمؤشر
 
 // ——————————— <strategy_calls> {
 //<long orders>
 if strategy.position_size <= 0 and longE and TPSType == "ATR" and tradeDateIsAllowed
     strategy.entry('Long', strategy.long, comment = 'LE')
-    longTradesCount := longTradesCount + 1
-    // إرسال تنبيه فتح مركز BUY مع TP/SL
-    jsonBuyATR = '{"signal":"BUY","symbol":"' + syminfo.ticker + '","entry_price":' + str.tostring(entryLine, "#.##") + ',"tp1":' + str.tostring(tp1Line, "#.##") + ',"tp2":' + str.tostring(tp2Line, "#.##") + ',"tp3":' + str.tostring(tp3Line, "#.##") + ',"stop_loss":' + str.tostring(slLine, "#.##") + ',"time":"' + f_formatTime(time) + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '","mode":"ATR"}'
-    alert(jsonBuyATR, alert.freq_once_per_bar)
+    // 🟢 تنبيه إشارة الشراء
+    msgBuy = str.replace(i_msgBuy, "{{ticker}}", syminfo.ticker)
+    alert(msgBuy, alert.freq_once_per_bar_close)
 if strategy.position_size > 0 and condition ==  1.0 and TPSType == "ATR" and tradeDateIsAllowed
     strategy.exit(id = 'LXTP1', from_entry = 'Long', qty_percent = i_lxQtyTP1, limit = tp1Line, stop = slLine, comment_profit = 'LXTP1', comment_loss = 'SL')
+    // 🎯 تنبيه الوصول للهدف الأول (TP1)
+    if longTP1
+        msgTP1 = str.replace(i_msgTP1, "{{ticker}}", syminfo.ticker)
+        alert(msgTP1, alert.freq_once_per_bar_close)
+    // 🛑 تنبيه وقف الخسارة (Stop Loss) - Long
+    if longSL
+        msgSL = str.replace(i_msgSL, "{{ticker}}", syminfo.ticker)
+        alert(msgSL, alert.freq_once_per_bar_close)
 if strategy.position_size > 0 and condition ==  1.1 and TPSType == "ATR" and tradeDateIsAllowed
     strategy.exit(id = 'LXTP2', from_entry = 'Long', qty_percent = i_lxQtyTP2, limit = tp2Line, stop = slLine, comment_profit = 'LXTP2', comment_loss = 'SL')
+    // 🎯 تنبيه الوصول للهدف الثاني (TP2)
+    if longTP2
+        msgTP2 = str.replace(i_msgTP2, "{{ticker}}", syminfo.ticker)
+        alert(msgTP2, alert.freq_once_per_bar_close)
 if strategy.position_size > 0 and condition ==  1.2 and TPSType == "ATR" and tradeDateIsAllowed
     strategy.exit(id = 'LXTP3', from_entry = 'Long', qty_percent = i_lxQtyTP3, limit = tp3Line, stop = slLine, comment_profit = 'LXTP3', comment_loss = 'SL')
+    // 🎯 تنبيه الوصول للهدف الثالث (TP3)
+    if longTP3
+        msgTP3 = str.replace(i_msgTP3, "{{ticker}}", syminfo.ticker)
+        alert(msgTP3, alert.freq_once_per_bar_close)
 if longX and tradeDateIsAllowed
     strategy.close('Long', comment = 'LX')
-    // إرسال تنبيه إغلاق مركز LONG
-    jsonCloseLongATR = '{"signal":"CLOSE","symbol":"' + syminfo.ticker + '","price":' + str.tostring(close, "#.##") + ',"time":"' + f_formatTime(time) + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '","mode":"ATR"}'
-    alert(jsonCloseLongATR, alert.freq_once_per_bar)
+    // ⚪ تنبيه إغلاق صفقة شراء
+    msgClose = str.replace(i_msgClose, "{{ticker}}", syminfo.ticker)
+    alert(msgClose, alert.freq_once_per_bar_close)
 //<short orders>
 if strategy.position_size >= 0 and shortE and TPSType == "ATR" and tradeDateIsAllowed
     strategy.entry('Short', strategy.short, comment = 'SE')
-    shortTradesCount := shortTradesCount + 1
-    // إرسال تنبيه فتح مركز SELL مع TP/SL
-    jsonSellATR = '{"signal":"SELL","symbol":"' + syminfo.ticker + '","entry_price":' + str.tostring(entryLine, "#.##") + ',"tp1":' + str.tostring(tp1Line, "#.##") + ',"tp2":' + str.tostring(tp2Line, "#.##") + ',"tp3":' + str.tostring(tp3Line, "#.##") + ',"stop_loss":' + str.tostring(slLine, "#.##") + ',"time":"' + f_formatTime(time) + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '","mode":"ATR"}'
-    alert(jsonSellATR, alert.freq_once_per_bar)
+    // 🔴 تنبيه إشارة البيع
+    msgSell = str.replace(i_msgSell, "{{ticker}}", syminfo.ticker)
+    alert(msgSell, alert.freq_once_per_bar_close)
 if strategy.position_size < 0 and condition == -1.0 and TPSType == "ATR" and tradeDateIsAllowed
     strategy.exit(id = 'SXTP1', from_entry = 'Short', qty_percent = i_sxQtyTP1, limit = tp1Line, stop = slLine, comment_profit = 'SXTP1', comment_loss = 'SL')
+    // 🎯 تنبيه الوصول للهدف الأول (TP1) - Short
+    if shortTP1
+        msgTP1 = str.replace(i_msgTP1, "{{ticker}}", syminfo.ticker)
+        alert(msgTP1, alert.freq_once_per_bar_close)
+    // 🛑 تنبيه وقف الخسارة (Stop Loss) - Short
+    if shortSL
+        msgSL = str.replace(i_msgSL, "{{ticker}}", syminfo.ticker)
+        alert(msgSL, alert.freq_once_per_bar_close)
 if strategy.position_size < 0 and condition == -1.1 and TPSType == "ATR" and tradeDateIsAllowed
     strategy.exit(id = 'SXTP2', from_entry = 'Short', qty_percent = i_sxQtyTP2, limit = tp2Line, stop = slLine, comment_profit = 'SXTP2', comment_loss = 'SL')
+    // 🎯 تنبيه الوصول للهدف الثاني (TP2) - Short
+    if shortTP2
+        msgTP2 = str.replace(i_msgTP2, "{{ticker}}", syminfo.ticker)
+        alert(msgTP2, alert.freq_once_per_bar_close)
 if strategy.position_size < 0 and condition == -1.2 and TPSType == "ATR" and tradeDateIsAllowed
     strategy.exit(id = 'SXTP3', from_entry = 'Short', qty_percent = i_sxQtyTP3, limit = tp3Line, stop = slLine, comment_profit = 'SXTP3', comment_loss = 'SL')
+    // 🎯 تنبيه الوصول للهدف الثالث (TP3) - Short
+    if shortTP3
+        msgTP3 = str.replace(i_msgTP3, "{{ticker}}", syminfo.ticker)
+        alert(msgTP3, alert.freq_once_per_bar_close)
 if shortX and tradeDateIsAllowed
     strategy.close('Short', comment = 'SX')
-    // إرسال تنبيه إغلاق مركز SHORT
-    jsonCloseShortATR = '{"signal":"CLOSE","symbol":"' + syminfo.ticker + '","price":' + str.tostring(close, "#.##") + ',"time":"' + f_formatTime(time) + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '","mode":"ATR"}'
-    alert(jsonCloseShortATR, alert.freq_once_per_bar)
+    // ⚪ تنبيه إغلاق صفقة بيع
+    msgClose = str.replace(i_msgClose, "{{ticker}}", syminfo.ticker)
+    alert(msgClose, alert.freq_once_per_bar_close)
 
 
 // ——————————— <visuals>
@@ -571,6 +516,17 @@ p_slLine     = plot (  condition ==  1.0 or  condition == -1.0 or    condition =
 
 //fill(  p_tp3Line, p_entryLine,  color      = leTrigger or seTrigger ? na :color.new(color.green, 90))
 fill(  p_entryLine, p_slLine,  color      = leTrigger or seTrigger ? na :color.new(color.red, 90))
+
+//<alerts labels>
+plotshape(  i_alertOn and longE,  title      = 'Long',  text       = 'Long',  textcolor  = color.white,  color      = color.green,  style      = shape.labelup,  size       = size.tiny,  location   = location.belowbar)
+plotshape(  i_alertOn and shortE,  title      = 'Short',  text       = 'Short',  textcolor  = color.white,  color      = color.red,  style      = shape.labeldown,  size       = size.tiny,  location   = location.abovebar)
+plotshape(  i_alertOn and (longX or shortX) ? close : na,  title      = 'Close',  text       = 'Close',  textcolor  = color.white,  color      = color.gray,  style      = shape.labelup,  size       = size.tiny,  location   = location.absolute)
+l_tp         = i_alertOn and (longTP1 or shortTP1) ? close : na
+
+plotshape(  l_tp,  title      = "TP1 Cross",  text       = "TP1",  textcolor  = color.white,  color      = color.olive,  style      = shape.labelup,  size       = size.tiny,  location   = location.absolute)
+plotshape(  i_alertOn and (longTP2 or shortTP2) ? close : na,  title      = "TP2 Cross",  text       = "TP2",  textcolor  = color.white,  color      = color.olive,  style      = shape.labelup,  size       = size.tiny,  location   = location.absolute)
+plotshape(  i_alertOn and (longTP3 or shortTP3) ? close : na,  title      = "TP3 Cross",  text       = "TP3",  textcolor  = color.white,  color      = color.olive,  style      = shape.labelup,  size       = size.tiny,  location   = location.absolute)
+plotshape(  i_alertOn and (longSL or shortSL) ? close : na,  title      = "SL Cross",  text       = "SL",  textcolor  = color.white,  color      = color.maroon,  style      = shape.labelup,  size       = size.tiny,  location   = location.absolute)
 
 //<debug>
 plot(  na,  title      = "─── <debug> ───",  editable   = false,  display    = display.data_window)
@@ -671,7 +627,7 @@ drawTester = input.bool(true, "Strategy Performance", group='Dashboards', inline
 // ═══════════════════════════════════════════════════════════════════════════
 // 🎯 هدف الربح الشهري - Monthly Profit Target
 // ═══════════════════════════════════════════════════════════════════════════
-enableMonthlyTarget = input.bool(false, "تفعيل هدف ربح شهري", group='Dashboards', inline="Monthly Target")
+enableMonthlyTarget = input.bool(true, "تفعيل هدف ربح شهري", group='Dashboards', inline="Monthly Target")
 monthlyTargetPercent = input.float(10.0, "الهدف الشهري (%)", minval=0.1, maxval=100.0, step=0.1, group='Dashboards', inline="Monthly Target", tooltip="حدد الهدف الشهري كنسبة مئوية (مثلاً: 10 = 10%)")
 
 var balance = strategy.initial_capital
@@ -680,8 +636,10 @@ var maxDrawdown = 0.0
 var maxBalance = 0.0
 var totalWins = 0
 var totalLoss = 0
+// تتبع عدد الصفقات التي خسرت بسبب Stop Loss (سيتم حسابه في قسم الباك تيست)
+
 // Prepare stats table
-var table testTable = table.new(position.top_right, 5, 5, border_width=1)
+var table testTable = table.new(position.top_right, 5, 4, border_width=1)
 f_fillCell(_table, _column, _row, _title, _value, _bgcolor, _txtcolor) =>
     _cellText = _title + "\n" + _value
     table.cell(_table, _column, _row, _cellText, bgcolor=_bgcolor, text_color=_txtcolor)
@@ -695,7 +653,6 @@ f_fillCell(_table, _column, _row, _title, _value, _bgcolor, _txtcolor) =>
 var bgcolor = color.new(color.black,0)
 if drawTester and tradeDateIsAllowed
     if barstate.islastconfirmedhistory
-        
         // حساب عدد الصفقات التي أُغلقت بسبب Stop Loss
         // في Pine Script، لا يمكن الوصول مباشرة لسبب الإغلاق
         // لذلك نستخدم تقدير بناءً على عدد الصفقات الخاسرة
@@ -931,7 +888,7 @@ if timeframe.in_seconds() > timeframe.in_seconds("D")
 
 
 // Global Dashboard Variables
-// ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+// ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 // Dashboard Table Text Size
 i_tableTextSize = "Normal" //input.string(title="Dashboard Size", defval="Normal", options=["Auto",  "Huge",  "Large", "Normal", "Small", "Tiny"], group="Dashboards")
@@ -946,7 +903,7 @@ table_text_size(s) =>
 tableTextSize = table_text_size(i_tableTextSize)
 
 // Monthly Table Performance Dashboard By @QuantNomad
-// ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+// ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 i_showMonthlyPerformance = input.bool(false, 'Monthly Performance', group='Dashboards', inline="Show Dashboards")
 i_monthlyReturnPercision = 2
 
@@ -1138,55 +1095,4 @@ if DemaAtrShort
 
 // Plotting
 plot( showAtr ? DemaAtr : na,  "ATR",  color=Trendcolor,  linewidth = 2 )
-
-// ==========================================================================================
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔔 إعدادات التنبيهات - Alert Setup Instructions
-// ═══════════════════════════════════════════════════════════════════════════
-// 
-// ✅ تم تفعيل نظام التنبيهات مع الأسعار الحقيقية من Pine Script
-// ✅ جميع التنبيهات ترسل JSON format مع الأسعار الحقيقية (وليس Position Size)
-// 
-// 📋 كيفية إعداد التنبيهات في TradingView:
-// 
-// 1. افتح TradingView واختر المؤشر على الرسم البياني
-// 2. اضغط بزر الماوس الأيمن على الرسم البياني → "Add Alert"
-// 3. في إعدادات Alert:
-//    - Condition: اختر "Any alert() function call"
-//    - Message: اتركه فارغاً تماماً (سيتم إرسال JSON تلقائياً)
-//    - Webhook URL: ضع رابط webhook الخاص بك
-//      مثال: https://your-domain.com/webhook
-//    - Frequency: "Once Per Bar Close" (موصى به)
-// 4. احفظ Alert
-// 
-// 📊 أنواع التنبيهات المتاحة:
-// 
-// - BUY: إشارة شراء (يحتوي على entry_price, tp1, tp2, tp3, stop_loss)
-// - SELL: إشارة بيع (يحتوي على entry_price, tp1, tp2, tp3, stop_loss)
-// - TP1: وصول إلى Take Profit 1
-// - TP2: وصول إلى Take Profit 2
-// - TP3: وصول إلى Take Profit 3
-// - SL: وصول إلى Stop Loss
-// - CLOSE: إغلاق المركز
-// 
-// 📝 تنسيق JSON المرسل:
-// {
-//   "signal": "BUY|SELL|TP1|TP2|TP3|SL|CLOSE",
-//   "symbol": "SYMBOL_NAME",
-//   "entry_price": 1234.56,        // سعر الدخول (لـ BUY/SELL)
-//   "price": 1234.56,              // السعر الحالي (لـ TP/SL/CLOSE)
-//   "tp1": 1250.00,                // Take Profit 1 (لـ BUY/SELL فقط)
-//   "tp2": 1265.00,                // Take Profit 2 (لـ BUY/SELL فقط)
-//   "tp3": 1280.00,                // Take Profit 3 (لـ BUY/SELL فقط)
-//   "stop_loss": 1220.00,          // Stop Loss (لـ BUY/SELL فقط)
-//   "time": "2024-01-15 14:30",    // الوقت
-//   "timeframe": "15",             // الإطار الزمني
-//   "mode": "ATR|Trailing|Options" // نوع الوضع
-// }
-// 
-// ⚠️ ملاحظة مهمة:
-// - جميع الأسعار الحقيقية تُرسل من Pine Script (وليس Position Size)
-// - التنبيهات تعمل مع جميع الأنواع: ATR, Trailing, Options
-// - استخدم alert.freq_once_per_bar لتجنب التكرار
-// 
 // ==========================================================================================

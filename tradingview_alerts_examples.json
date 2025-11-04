@@ -1,0 +1,117 @@
+{
+  "alerts": {
+    "1_BUY": {
+      "description": "إشارة شراء - يجب استبدال المتغيرات بالقيم الفعلية من Pine Script",
+      "template": "{\"signal\":\"BUY\",\"symbol\":\"{{ticker}}\",\"entry_price\":{{close}},\"tp1\":{{tp1_price}},\"tp2\":{{tp2_price}},\"tp3\":{{tp3_price}},\"stop_loss\":{{stop_loss_price}},\"time\":\"{{time}}\",\"timeframe\":\"{{interval}}\"}",
+      "example": {
+        "signal": "BUY",
+        "symbol": "BTCUSDT",
+        "entry_price": 42850.50,
+        "tp1": 43300.75,
+        "tp2": 43750.25,
+        "tp3": 44200.50,
+        "stop_loss": 42150.00,
+        "time": "2024-01-15 14:30:00",
+        "timeframe": "15m"
+      },
+      "ready_to_copy": "{\"signal\":\"BUY\",\"symbol\":\"BTCUSDT\",\"entry_price\":42850.50,\"tp1\":43300.75,\"tp2\":43750.25,\"tp3\":44200.50,\"stop_loss\":42150.00,\"time\":\"2024-01-15 14:30:00\",\"timeframe\":\"15m\"}"
+    },
+    "2_SELL": {
+      "description": "إشارة بيع - يجب استبدال المتغيرات بالقيم الفعلية من Pine Script",
+      "template": "{\"signal\":\"SELL\",\"symbol\":\"{{ticker}}\",\"entry_price\":{{close}},\"tp1\":{{tp1_price}},\"tp2\":{{tp2_price}},\"tp3\":{{tp3_price}},\"stop_loss\":{{stop_loss_price}},\"time\":\"{{time}}\",\"timeframe\":\"{{interval}}\"}",
+      "example": {
+        "signal": "SELL",
+        "symbol": "BTCUSDT",
+        "entry_price": 42850.50,
+        "tp1": 42400.25,
+        "tp2": 41950.75,
+        "tp3": 41500.50,
+        "stop_loss": 43550.00,
+        "time": "2024-01-15 14:30:00",
+        "timeframe": "15m"
+      },
+      "ready_to_copy": "{\"signal\":\"SELL\",\"symbol\":\"BTCUSDT\",\"entry_price\":42850.50,\"tp1\":42400.25,\"tp2\":41950.75,\"tp3\":41500.50,\"stop_loss\":43550.00,\"time\":\"2024-01-15 14:30:00\",\"timeframe\":\"15m\"}"
+    },
+    "3_TP1_HIT": {
+      "description": "تحقيق الهدف الأول - يجب استبدال المتغيرات بالقيم الفعلية من Pine Script",
+      "template": "{\"signal\":\"TP1_HIT\",\"symbol\":\"{{ticker}}\",\"entry_price\":{{entry_price}},\"exit_price\":{{tp1_price}},\"tp1\":{{tp1_price}},\"time\":\"{{time}}\",\"timeframe\":\"{{interval}}\"}",
+      "example": {
+        "signal": "TP1_HIT",
+        "symbol": "BTCUSDT",
+        "entry_price": 42850.50,
+        "exit_price": 43300.75,
+        "tp1": 43300.75,
+        "time": "2024-01-15 15:45:00",
+        "timeframe": "15m"
+      },
+      "ready_to_copy": "{\"signal\":\"TP1_HIT\",\"symbol\":\"BTCUSDT\",\"entry_price\":42850.50,\"exit_price\":43300.75,\"tp1\":43300.75,\"time\":\"2024-01-15 15:45:00\",\"timeframe\":\"15m\"}"
+    },
+    "4_TP2_HIT": {
+      "description": "تحقيق الهدف الثاني - يجب استبدال المتغيرات بالقيم الفعلية من Pine Script",
+      "template": "{\"signal\":\"TP2_HIT\",\"symbol\":\"{{ticker}}\",\"entry_price\":{{entry_price}},\"exit_price\":{{tp2_price}},\"tp2\":{{tp2_price}},\"time\":\"{{time}}\",\"timeframe\":\"{{interval}}\"}",
+      "example": {
+        "signal": "TP2_HIT",
+        "symbol": "BTCUSDT",
+        "entry_price": 42850.50,
+        "exit_price": 43750.25,
+        "tp2": 43750.25,
+        "time": "2024-01-15 16:30:00",
+        "timeframe": "15m"
+      },
+      "ready_to_copy": "{\"signal\":\"TP2_HIT\",\"symbol\":\"BTCUSDT\",\"entry_price\":42850.50,\"exit_price\":43750.25,\"tp2\":43750.25,\"time\":\"2024-01-15 16:30:00\",\"timeframe\":\"15m\"}"
+    },
+    "5_TP3_HIT": {
+      "description": "تحقيق الهدف الثالث - يجب استبدال المتغيرات بالقيم الفعلية من Pine Script",
+      "template": "{\"signal\":\"TP3_HIT\",\"symbol\":\"{{ticker}}\",\"entry_price\":{{entry_price}},\"exit_price\":{{tp3_price}},\"tp3\":{{tp3_price}},\"time\":\"{{time}}\",\"timeframe\":\"{{interval}}\"}",
+      "example": {
+        "signal": "TP3_HIT",
+        "symbol": "BTCUSDT",
+        "entry_price": 42850.50,
+        "exit_price": 44200.50,
+        "tp3": 44200.50,
+        "time": "2024-01-15 17:15:00",
+        "timeframe": "15m"
+      },
+      "ready_to_copy": "{\"signal\":\"TP3_HIT\",\"symbol\":\"BTCUSDT\",\"entry_price\":42850.50,\"exit_price\":44200.50,\"tp3\":44200.50,\"time\":\"2024-01-15 17:15:00\",\"timeframe\":\"15m\"}"
+    },
+    "6_STOP_LOSS": {
+      "description": "وقف الخسارة - يجب استبدال المتغيرات بالقيم الفعلية من Pine Script",
+      "template": "{\"signal\":\"STOP_LOSS\",\"symbol\":\"{{ticker}}\",\"price\":{{close}},\"time\":\"{{time}}\",\"timeframe\":\"{{interval}}\"}",
+      "example": {
+        "signal": "STOP_LOSS",
+        "symbol": "BTCUSDT",
+        "price": 42150.00,
+        "time": "2024-01-15 15:20:00",
+        "timeframe": "15m"
+      },
+      "ready_to_copy": "{\"signal\":\"STOP_LOSS\",\"symbol\":\"BTCUSDT\",\"price\":42150.00,\"time\":\"2024-01-15 15:20:00\",\"timeframe\":\"15m\"}"
+    },
+    "7_CLOSE": {
+      "description": "إغلاق المركز - يجب استبدال المتغيرات بالقيم الفعلية من Pine Script",
+      "template": "{\"signal\":\"CLOSE\",\"symbol\":\"{{ticker}}\",\"price\":{{close}},\"time\":\"{{time}}\",\"timeframe\":\"{{interval}}\"}",
+      "example": {
+        "signal": "CLOSE",
+        "symbol": "BTCUSDT",
+        "price": 44000.00,
+        "time": "2024-01-15 18:00:00",
+        "timeframe": "15m"
+      },
+      "ready_to_copy": "{\"signal\":\"CLOSE\",\"symbol\":\"BTCUSDT\",\"price\":44000.00,\"time\":\"2024-01-15 18:00:00\",\"timeframe\":\"15m\"}"
+    }
+  },
+  "notes": {
+    "important": [
+      "استبدل القيم في JSON بالقيم الفعلية من Pine Script",
+      "استخدم المتغيرات الديناميكية مثل {{ticker}} و {{close}}",
+      "تأكد من أن JSON في سطر واحد (minified)",
+      "اختبر كل إشارة قبل الاستخدام"
+    ],
+    "pine_script_variables": {
+      "{{ticker}}": "رمز العملة (syminfo.ticker)",
+      "{{close}}": "السعر الحالي (close)",
+      "{{time}}": "الوقت (str.tostring(time, 'yyyy-MM-dd HH:mm:ss'))",
+      "{{interval}}": "الإطار الزمني (timeframe.period)"
+    }
+  }
+}
+

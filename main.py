@@ -361,12 +361,15 @@ def webhook(chat_id=None):
     
     try:
         # Log request details for debugging
-        logger.info(f"=== Webhook Request Received ===")
+        logger.info("=" * 80)
+        logger.info("=== WEBHOOK REQUEST RECEIVED ===")
+        logger.info("=" * 80)
         logger.info(f"Method: {request.method}")
-        logger.info(f"Headers: {dict(request.headers)}")
         logger.info(f"URL: {request.url}")
         logger.info(f"Chat ID from URL: {chat_id}")
         logger.info(f"Content-Type: {request.headers.get('Content-Type', 'Not specified')}")
+        logger.info(f"Headers: {dict(request.headers)}")
+        logger.info("-" * 80)
         
         data = None
         
@@ -375,7 +378,17 @@ def webhook(chat_id=None):
         # TradingView may send JSON mixed with default strategy message
         try:
             raw_data = request.get_data(as_text=True)
-            logger.info(f"Raw data received (first 300 chars): {raw_data[:300] if raw_data else 'Empty'}")
+            logger.info("=" * 80)
+            logger.info("=== RAW DATA RECEIVED ===")
+            logger.info("=" * 80)
+            if raw_data:
+                logger.info(f"Raw Data Length: {len(raw_data)} characters")
+                logger.info(f"Raw Data (Full):")
+                logger.info("-" * 80)
+                logger.info(raw_data)
+                logger.info("-" * 80)
+            else:
+                logger.info("Raw Data: Empty")
             if raw_data:
                 import json
                 # Strip whitespace before/after JSON (TradingView might add extra spaces)
@@ -509,7 +522,22 @@ def webhook(chat_id=None):
                 "tip": "In TradingView Alert, use JSON format in the message field. See TRADINGVIEW_ALERTS_SETUP.md"
             }), 400
         
-        logger.info(f"Received data: {data}")
+        # Log parsed data in a formatted way
+        logger.info("=" * 80)
+        logger.info("=== PARSED DATA ===")
+        logger.info("=" * 80)
+        try:
+            import json
+            formatted_data = json.dumps(data, indent=2, ensure_ascii=False)
+            logger.info("Parsed Data (JSON formatted):")
+            logger.info("-" * 80)
+            logger.info(formatted_data)
+            logger.info("-" * 80)
+        except Exception as e:
+            logger.info(f"Parsed Data (dict): {data}")
+            logger.warning(f"Could not format as JSON: {e}")
+        logger.info(f"Data Type: {type(data)}")
+        logger.info(f"Data Keys: {list(data.keys()) if isinstance(data, dict) else 'N/A'}")
         
         # Check for duplicate messages (same signal, symbol, within same minute)
         message_key = get_message_key(data)
@@ -579,8 +607,18 @@ def webhook(chat_id=None):
         
         # Send message to Telegram (use chat_id from URL if provided)
         if message:
-            logger.info(f"Formatted message length: {len(message)} characters")
-            logger.info(f"Sending message to chat_id: {target_chat_id}")
+            logger.info("=" * 80)
+            logger.info("=== FORMATTED MESSAGE (TO BE SENT) ===")
+            logger.info("=" * 80)
+            logger.info(f"Message Length: {len(message)} characters")
+            logger.info("-" * 80)
+            logger.info("Message Content:")
+            logger.info("-" * 80)
+            logger.info(message)
+            logger.info("-" * 80)
+            logger.info(f"Target Chat ID: {target_chat_id}")
+            logger.info("=" * 80)
+            
             success = send_message(message, chat_id=target_chat_id)
             if success:
                 logger.info(f"✅ Successfully sent {signal} signal to Telegram")
