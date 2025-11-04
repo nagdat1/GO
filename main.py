@@ -15,6 +15,8 @@ from telegram_bot import (
 )
 from config import WEBHOOK_PORT, DEBUG, get_config_status
 import logging
+import re
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(
@@ -25,6 +27,56 @@ logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
+
+def parse_tradingview_text_alert(text: str) -> dict:
+    """
+    Parse TradingView text alert message to extract signal information
+    
+    Example input:
+    "nagdat (Trailing, Open/Close, No Filtering, 7, 45, 10, 2, 10, 50, 30, 20, 10): تم تنفيذ الأمر buy @ 25319.53 على ACEUSDT. المركز الجديدة للإستراتيجية هو 0"
+    
+    Returns:
+        dict: Parsed data or None if cannot parse
+    """
+    try:
+        # Extract signal type (buy/sell)
+        signal_match = re.search(r'(buy|sell|BUY|SELL)', text, re.IGNORECASE)
+        if not signal_match:
+            return None
+        
+        signal = signal_match.group(1).upper()
+        
+        # Extract price
+        price_match = re.search(r'@\s*([\d.]+)', text)
+        price = float(price_match.group(1)) if price_match else 0
+        
+        # Extract symbol
+        symbol_match = re.search(r'على\s+(\w+)', text) or re.search(r'on\s+(\w+)', text, re.IGNORECASE)
+        symbol = symbol_match.group(1) if symbol_match else "UNKNOWN"
+        
+        # Get current time
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # For text alerts, we don't have TP/SL info, so we'll use basic format
+        result = {
+            "signal": signal,
+            "symbol": symbol,
+            "entry_price": price,
+            "price": price,  # For CLOSE and SL signals
+            "time": current_time,
+            "timeframe": "N/A",
+            "tp1": price * 1.01,  # Estimate 1% (will be ignored if not needed)
+            "tp2": price * 1.02,  # Estimate 2%
+            "tp3": price * 1.03,  # Estimate 3%
+            "stop_loss": price * 0.99  # Estimate 1% down
+        }
+        
+        logger.info(f"Parsed TradingView text alert: {result}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error parsing TradingView text alert: {e}")
+        return None
 
 # Check configuration status (without raising error)
 from config import get_config_status
@@ -145,13 +197,29 @@ def webhook(chat_id=None):
             except Exception as e:
                 logger.warning(f"Failed to get form data: {e}")
         
+        # If we still don't have data, try to parse as TradingView text message
+        if not data:
+            try:
+                raw_data = request.get_data(as_text=True)
+                if raw_data:
+                    # Try to parse TradingView text alert message
+                    parsed_data = parse_tradingview_text_alert(raw_data)
+                    if parsed_data:
+                        data = parsed_data
+                        logger.info("Successfully parsed TradingView text alert")
+                    else:
+                        logger.warning(f"Could not parse text message: {raw_data[:100]}")
+            except Exception as e:
+                logger.warning(f"Error parsing text alert: {e}")
+        
         if not data:
             logger.warning("Received empty request - no JSON, form, or raw data")
             raw_data_preview = request.get_data(as_text=True)[:200] if request.get_data() else "No data"
             return jsonify({
                 "error": "No data received",
-                "message": "Please send JSON data in the request body",
-                "raw_data_preview": raw_data_preview
+                "message": "Please send JSON data in the request body or use TradingView Alert with JSON format",
+                "raw_data_preview": raw_data_preview,
+                "tip": "In TradingView Alert, use JSON format in the message field. See TRADINGVIEW_ALERTS_SETUP.md"
             }), 400
         
         logger.info(f"Received data: {data}")
