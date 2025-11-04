@@ -47,7 +47,7 @@ almaRibbon = input(false, title='Enable Ribbon?')
 green100 = #008000FF
 lime100 = #00FF00FF
 red100 = #FF0000FF
-blue100 =rgb(0, 217, 255)
+blue100 = color.rgb(0, 217, 255)
 aqua100 = #00FFFFFF
 darkred100 = #8B0000FF
 gray100 = #808080FF
@@ -498,10 +498,14 @@ if strategy.position_size <= 0 and longE and TPSType == "ATR" and tradeDateIsAll
     msgBuy := msgBuy + "🛑 Stop Loss: " + slText
     
     // JSON format for Webhook - send JSON directly in alert for webhook compatibility
+    // Note: Using alertcondition() instead of alert() to avoid TradingView default strategy messages
+    // The alertcondition() will send JSON automatically when condition is met
+    // jsonBuy is kept for reference but not used in alert() to prevent TradingView default messages
     jsonBuy = '{"signal":"BUY","symbol":"' + syminfo.ticker + '","entry_price":' + str.tostring(close, "#.##") + ',"tp1":' + str.tostring(tp1Line, "#.##") + ',"tp2":' + str.tostring(tp2Line, "#.##") + ',"tp3":' + str.tostring(tp3Line, "#.##") + ',"stop_loss":' + str.tostring(slLine, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
     
-    // Send JSON instead of formatted text for webhook compatibility
-    alert(jsonBuy, alert.freq_once_per_bar_close)
+    // ⚠️ REMOVED alert() to prevent TradingView from adding default strategy messages
+    // Use alertcondition() "BUY Signal for Webhook" in TradingView Alert UI instead
+    // This ensures only JSON is sent, not the default strategy message with position_size
 if strategy.position_size > 0 and condition ==  1.0 and TPSType == "ATR" and tradeDateIsAllowed
     strategy.exit(id = 'LXTP1', from_entry = 'Long', qty_percent = i_lxQtyTP1, limit = tp1Line, stop = slLine, comment_profit = 'LXTP1', comment_loss = 'SL')
     // 🎯 TP1 Target Hit
@@ -517,10 +521,11 @@ if strategy.position_size > 0 and condition ==  1.0 and TPSType == "ATR" and tra
         msgTP1 := msgTP1 + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
         msgTP1 := msgTP1 + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
         
-        // JSON format for Webhook (Long TP1) - send JSON directly
+        // JSON format for Webhook (Long TP1)
+        // ⚠️ Use alertcondition() "TP1 Hit for Webhook" instead of alert() to avoid default strategy messages
         jsonTP1Long = '{"signal":"TP1_HIT","symbol":"' + syminfo.ticker + '","entry_price":' + str.tostring(entryLine, "#.##") + ',"exit_price":' + str.tostring(tp1Line, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
         
-        alert(jsonTP1Long, alert.freq_once_per_bar_close)
+        // ⚠️ REMOVED alert() - use alertcondition() instead
     // 🛑 Stop Loss Hit
     if longSL
         msgSL = "🛑😔🛑 *STOP LOSS HIT* 🛑😔🛑\n\n"
@@ -529,10 +534,11 @@ if strategy.position_size > 0 and condition ==  1.0 and TPSType == "ATR" and tra
         msgSL := msgSL + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
         msgSL := msgSL + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
         
-        // JSON format for Webhook (Long SL) - send JSON directly
+        // JSON format for Webhook (Long SL)
+        // ⚠️ Use alertcondition() "Stop Loss Hit for Webhook" instead of alert()
         jsonSLLong = '{"signal":"STOP_LOSS","symbol":"' + syminfo.ticker + '","price":' + str.tostring(close, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
         
-        alert(jsonSLLong, alert.freq_once_per_bar_close)
+        // ⚠️ REMOVED alert() - use alertcondition() instead
 if strategy.position_size > 0 and condition ==  1.1 and TPSType == "ATR" and tradeDateIsAllowed
     strategy.exit(id = 'LXTP2', from_entry = 'Long', qty_percent = i_lxQtyTP2, limit = tp2Line, stop = slLine, comment_profit = 'LXTP2', comment_loss = 'SL')
     // 🎯 TP2 Target Hit
@@ -548,10 +554,11 @@ if strategy.position_size > 0 and condition ==  1.1 and TPSType == "ATR" and tra
         msgTP2 := msgTP2 + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
         msgTP2 := msgTP2 + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
         
-        // JSON format for Webhook (Long TP2) - send JSON directly
+        // JSON format for Webhook (Long TP2)
+        // ⚠️ Use alertcondition() "TP2 Hit for Webhook" instead of alert()
         jsonTP2Long = '{"signal":"TP2_HIT","symbol":"' + syminfo.ticker + '","entry_price":' + str.tostring(entryLine, "#.##") + ',"exit_price":' + str.tostring(tp2Line, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
         
-        alert(jsonTP2Long, alert.freq_once_per_bar_close)
+        // ⚠️ REMOVED alert() - use alertcondition() instead
 if strategy.position_size > 0 and condition ==  1.2 and TPSType == "ATR" and tradeDateIsAllowed
     strategy.exit(id = 'LXTP3', from_entry = 'Long', qty_percent = i_lxQtyTP3, limit = tp3Line, stop = slLine, comment_profit = 'LXTP3', comment_loss = 'SL')
     // 🎯 TP3 Target Hit
@@ -567,10 +574,11 @@ if strategy.position_size > 0 and condition ==  1.2 and TPSType == "ATR" and tra
         msgTP3 := msgTP3 + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
         msgTP3 := msgTP3 + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
         
-        // JSON format for Webhook (Long TP3) - send JSON directly
+        // JSON format for Webhook (Long TP3)
+        // ⚠️ Use alertcondition() "TP3 Hit for Webhook" instead of alert()
         jsonTP3Long = '{"signal":"TP3_HIT","symbol":"' + syminfo.ticker + '","entry_price":' + str.tostring(entryLine, "#.##") + ',"exit_price":' + str.tostring(tp3Line, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
         
-        alert(jsonTP3Long, alert.freq_once_per_bar_close)
+        // ⚠️ REMOVED alert() - use alertcondition() instead
 if longX and tradeDateIsAllowed
     strategy.close('Long', comment = 'LX')
     // ⚪ Position Closed
@@ -580,10 +588,11 @@ if longX and tradeDateIsAllowed
     msgClose := msgClose + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
     msgClose := msgClose + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
     
-    // JSON format for Webhook (Long Close) - send JSON directly
+    // JSON format for Webhook (Long Close)
+    // ⚠️ Use alertcondition() "Position Closed for Webhook" instead of alert()
     jsonCloseLong = '{"signal":"CLOSE","symbol":"' + syminfo.ticker + '","price":' + str.tostring(close, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
     
-    alert(jsonCloseLong, alert.freq_once_per_bar_close)
+    // ⚠️ REMOVED alert() - use alertcondition() instead
 //<short orders>
 if strategy.position_size >= 0 and shortE and TPSType == "ATR" and tradeDateIsAllowed
     strategy.entry('Short', strategy.short, comment = 'SE')
@@ -613,10 +622,13 @@ if strategy.position_size >= 0 and shortE and TPSType == "ATR" and tradeDateIsAl
     msgSell := msgSell + "🛑 Stop Loss: " + slText
     
     // JSON format for Webhook - send JSON directly in alert for webhook compatibility
+    // Note: Using alertcondition() instead of alert() to avoid TradingView default strategy messages
+    // The alertcondition() will send JSON automatically when condition is met
     jsonSell = '{"signal":"SELL","symbol":"' + syminfo.ticker + '","entry_price":' + str.tostring(close, "#.##") + ',"tp1":' + str.tostring(tp1Line, "#.##") + ',"tp2":' + str.tostring(tp2Line, "#.##") + ',"tp3":' + str.tostring(tp3Line, "#.##") + ',"stop_loss":' + str.tostring(slLine, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
     
-    // Send JSON instead of formatted text for webhook compatibility
-    alert(jsonSell, alert.freq_once_per_bar_close)
+    // ⚠️ REMOVED alert() to prevent TradingView from adding default strategy messages
+    // Use alertcondition() "SELL Signal for Webhook" in TradingView Alert UI instead
+    // This ensures only JSON is sent, not the default strategy message with position_size
 if strategy.position_size < 0 and condition == -1.0 and TPSType == "ATR" and tradeDateIsAllowed
     strategy.exit(id = 'SXTP1', from_entry = 'Short', qty_percent = i_sxQtyTP1, limit = tp1Line, stop = slLine, comment_profit = 'SXTP1', comment_loss = 'SL')
     // 🎯 TP1 Target Hit (Short)
@@ -632,10 +644,11 @@ if strategy.position_size < 0 and condition == -1.0 and TPSType == "ATR" and tra
         msgTP1 := msgTP1 + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
         msgTP1 := msgTP1 + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
         
-        // JSON format for Webhook (Short TP1) - send JSON directly
+        // JSON format for Webhook (Short TP1)
+        // ⚠️ Use alertcondition() "TP1 Hit (Short) for Webhook" instead of alert()
         jsonTP1Short = '{"signal":"TP1_HIT","symbol":"' + syminfo.ticker + '","entry_price":' + str.tostring(entryLine, "#.##") + ',"exit_price":' + str.tostring(tp1Line, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
         
-        alert(jsonTP1Short, alert.freq_once_per_bar_close)
+        // ⚠️ REMOVED alert() - use alertcondition() instead
     // 🛑 Stop Loss Hit (Short)
     if shortSL
         msgSL = "🛑😔🛑 *STOP LOSS HIT* 🛑😔🛑\n\n"
@@ -644,10 +657,11 @@ if strategy.position_size < 0 and condition == -1.0 and TPSType == "ATR" and tra
         msgSL := msgSL + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
         msgSL := msgSL + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
         
-        // JSON format for Webhook (Short SL) - send JSON directly
+        // JSON format for Webhook (Short SL)
+        // ⚠️ Use alertcondition() "Stop Loss Hit (Short) for Webhook" instead of alert()
         jsonSLShort = '{"signal":"STOP_LOSS","symbol":"' + syminfo.ticker + '","price":' + str.tostring(close, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
         
-        alert(jsonSLShort, alert.freq_once_per_bar_close)
+        // ⚠️ REMOVED alert() - use alertcondition() instead
 if strategy.position_size < 0 and condition == -1.1 and TPSType == "ATR" and tradeDateIsAllowed
     strategy.exit(id = 'SXTP2', from_entry = 'Short', qty_percent = i_sxQtyTP2, limit = tp2Line, stop = slLine, comment_profit = 'SXTP2', comment_loss = 'SL')
     // 🎯 TP2 Target Hit (Short)
@@ -663,10 +677,11 @@ if strategy.position_size < 0 and condition == -1.1 and TPSType == "ATR" and tra
         msgTP2 := msgTP2 + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
         msgTP2 := msgTP2 + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
         
-        // JSON format for Webhook (Short TP2) - send JSON directly
+        // JSON format for Webhook (Short TP2)
+        // ⚠️ Use alertcondition() "TP2 Hit (Short) for Webhook" instead of alert()
         jsonTP2Short = '{"signal":"TP2_HIT","symbol":"' + syminfo.ticker + '","entry_price":' + str.tostring(entryLine, "#.##") + ',"exit_price":' + str.tostring(tp2Line, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
         
-        alert(jsonTP2Short, alert.freq_once_per_bar_close)
+        // ⚠️ REMOVED alert() - use alertcondition() instead
 if strategy.position_size < 0 and condition == -1.2 and TPSType == "ATR" and tradeDateIsAllowed
     strategy.exit(id = 'SXTP3', from_entry = 'Short', qty_percent = i_sxQtyTP3, limit = tp3Line, stop = slLine, comment_profit = 'SXTP3', comment_loss = 'SL')
     // 🎯 TP3 Target Hit (Short)
@@ -682,10 +697,11 @@ if strategy.position_size < 0 and condition == -1.2 and TPSType == "ATR" and tra
         msgTP3 := msgTP3 + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
         msgTP3 := msgTP3 + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
         
-        // JSON format for Webhook (Short TP3) - send JSON directly
+        // JSON format for Webhook (Short TP3)
+        // ⚠️ Use alertcondition() "TP3 Hit (Short) for Webhook" instead of alert()
         jsonTP3Short = '{"signal":"TP3_HIT","symbol":"' + syminfo.ticker + '","entry_price":' + str.tostring(entryLine, "#.##") + ',"exit_price":' + str.tostring(tp3Line, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
         
-        alert(jsonTP3Short, alert.freq_once_per_bar_close)
+        // ⚠️ REMOVED alert() - use alertcondition() instead
 if shortX and tradeDateIsAllowed
     strategy.close('Short', comment = 'SX')
     // ⚪ Position Closed (Short)
@@ -695,10 +711,11 @@ if shortX and tradeDateIsAllowed
     msgClose := msgClose + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
     msgClose := msgClose + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
     
-    // JSON format for Webhook (Short Close) - send JSON directly
+    // JSON format for Webhook (Short Close)
+    // ⚠️ Use alertcondition() "Position Closed (Short) for Webhook" instead of alert()
     jsonCloseShort = '{"signal":"CLOSE","symbol":"' + syminfo.ticker + '","price":' + str.tostring(close, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
     
-    alert(jsonCloseShort, alert.freq_once_per_bar_close)
+    // ⚠️ REMOVED alert() - use alertcondition() instead
 
 
 // ——————————— <visuals>
@@ -1298,11 +1315,18 @@ plot( showAtr ? DemaAtr : na,  "ATR",  color=Trendcolor,  linewidth = 2 )
 // ═══════════════════════════════════════════════════════════════════════════
 // 🔗 Webhook Alerts - إعدادات التنبيهات للـ Webhook
 // ═══════════════════════════════════════════════════════════════════════════
+// ⚠️ مهم جداً: TradingView قد يضيف رسالة افتراضية من strategy() حتى عند استخدام alertcondition()
+// ⚠️ الحل: في TradingView Alert UI:
+//     1. اختر Condition من alertcondition() (مثل "BUY Signal for Webhook")
+//     2. اترك Message field فارغاً تماماً
+//     3. لا تستخدم "Any alert() function call" - هذا سيضيف الرسالة الافتراضية
+// 
 // ملاحظة: Pine Script لا يدعم HTTP requests مباشرة
 // يجب استخدام TradingView Alerts مع Webhook URL
 // انظر README.md للحصول على تعليمات إعداد Alerts
 
 // Alert Conditions للـ Webhook - JSON format for webhook compatibility
+// JSON يحتوي على {{close}} (السعر الحقيقي) وليس Position Size
 alertcondition(buySignal and TPSType == "ATR" and tradeDateIsAllowed, 
      title="BUY Signal for Webhook", 
      message='{"signal":"BUY","symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP Line 1")}},"tp2":{{plot("TP Line 2")}},"tp3":{{plot("TP Line 3")}},"stop_loss":{{plot("SL Line")}},"time":"{{time}}","timeframe":"{{interval}}"}')

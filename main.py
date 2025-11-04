@@ -372,21 +372,90 @@ def webhook(chat_id=None):
         
         # Try to get data - TradingView sends as text/plain, not application/json
         # Method 1: Try to get raw data first (for text/plain content type)
-        # TradingView now sends JSON directly from alert() function
+        # TradingView may send JSON mixed with default strategy message
         try:
             raw_data = request.get_data(as_text=True)
-            logger.info(f"Raw data received (first 200 chars): {raw_data[:200] if raw_data else 'Empty'}")
+            logger.info(f"Raw data received (first 300 chars): {raw_data[:300] if raw_data else 'Empty'}")
             if raw_data:
                 import json
                 # Strip whitespace before/after JSON (TradingView might add extra spaces)
                 raw_data_cleaned = raw_data.strip()
-                # Try to parse JSON
-                data = json.loads(raw_data_cleaned)
-                logger.info("✅ Successfully parsed JSON from raw data")
-                logger.info(f"Parsed JSON keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
+                
+                # Try to extract JSON if it's mixed with strategy default message
+                # Strategy default message format: "text: JSON" or "text\nJSON" or "text JSON"
+                # Look for JSON pattern: starts with { and ends with }
+                json_match = None
+                import re as json_re
+                
+                # Check if text contains strategy default message pattern
+                has_strategy_message = "{{strategy.order.action}}" in raw_data_cleaned or "strategy.order" in raw_data_cleaned or "المركز الجديدة" in raw_data_cleaned
+                
+                if has_strategy_message:
+                    logger.warning("⚠️ TradingView default strategy message detected - trying to extract JSON...")
+                    # Strategy message format: "text: JSON" or text followed by JSON
+                    # Try to find JSON object after the strategy message
+                    # Look for pattern: "text" followed by JSON starting with {
+                    json_match = json_re.search(r'\{[^{}]*"signal"[^{}]*\{[^{}]*\}[^{}]*\}', raw_data_cleaned, json_re.DOTALL)
+                    if not json_match:
+                        # Try to find any JSON object with "signal" key
+                        json_match = json_re.search(r'\{.*?"signal".*?\}', raw_data_cleaned, json_re.DOTALL)
+                    if not json_match:
+                        # Try to find JSON object by matching braces
+                        # Find the last complete JSON object in the text
+                        brace_count = 0
+                        start_pos = -1
+                        for i, char in enumerate(raw_data_cleaned):
+                            if char == '{':
+                                if brace_count == 0:
+                                    start_pos = i
+                                brace_count += 1
+                            elif char == '}':
+                                brace_count -= 1
+                                if brace_count == 0 and start_pos != -1:
+                                    potential_json = raw_data_cleaned[start_pos:i+1]
+                                    if '"signal"' in potential_json:
+                                        json_match = json_re.search(r'\{.*"signal".*\}', potential_json, json_re.DOTALL)
+                                        if json_match:
+                                            break
+                
+                # If no strategy message, try simple JSON extraction
+                if not json_match:
+                    # Try to find JSON object with "signal" key
+                    json_match = json_re.search(r'\{[^{}]*"signal"[^{}]*\}', raw_data_cleaned, json_re.DOTALL)
+                if not json_match:
+                    # Try more flexible pattern
+                    json_match = json_re.search(r'\{.*"signal".*\}', raw_data_cleaned, json_re.DOTALL)
+                
+                if json_match:
+                    json_str = json_match.group(0)
+                    logger.info(f"Found JSON in text (length: {len(json_str)} chars): {json_str[:200]}...")
+                    try:
+                        data = json.loads(json_str)
+                        logger.info("✅ Successfully parsed JSON extracted from text")
+                        logger.info(f"Parsed JSON keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
+                        logger.info(f"Signal: {data.get('signal', 'N/A')}, Symbol: {data.get('symbol', 'N/A')}")
+                    except json.JSONDecodeError as e2:
+                        logger.warning(f"Failed to parse extracted JSON: {e2}")
+                        logger.info(f"Extracted JSON string: {json_str[:300]}")
+                        # Try to parse whole string as JSON
+                        try:
+                            data = json.loads(raw_data_cleaned)
+                            logger.info("✅ Successfully parsed JSON from raw data (after extraction attempt)")
+                        except:
+                            pass
+                else:
+                    # No JSON found in text, try to parse whole string as JSON
+                    logger.info("No JSON pattern found, trying to parse whole string as JSON...")
+                    try:
+                        data = json.loads(raw_data_cleaned)
+                        logger.info("✅ Successfully parsed JSON from raw data")
+                        logger.info(f"Parsed JSON keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
+                    except json.JSONDecodeError:
+                        logger.warning("Could not parse as JSON - will try text parsing")
+                        pass
         except json.JSONDecodeError as e:
             logger.warning(f"Failed to parse raw data as JSON: {e}")
-            logger.info(f"Raw data preview: {raw_data[:100] if raw_data else 'Empty'}")
+            logger.info(f"Raw data preview: {raw_data[:200] if raw_data else 'Empty'}")
             # Try to parse as form data
             try:
                 data = request.form.to_dict()
