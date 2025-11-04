@@ -47,7 +47,7 @@ almaRibbon = input(false, title='Enable Ribbon?')
 green100 = #008000FF
 lime100 = #00FF00FF
 red100 = #FF0000FF
-blue100 = #0000FFFF
+blue100 =rgb(0, 217, 255)
 aqua100 = #00FFFFFF
 darkred100 = #8B0000FF
 gray100 = #808080FF
@@ -1302,53 +1302,54 @@ plot( showAtr ? DemaAtr : na,  "ATR",  color=Trendcolor,  linewidth = 2 )
 // يجب استخدام TradingView Alerts مع Webhook URL
 // انظر README.md للحصول على تعليمات إعداد Alerts
 
-// Alert Conditions للـ Webhook
+// Alert Conditions للـ Webhook - JSON format for webhook compatibility
 alertcondition(buySignal and TPSType == "ATR" and tradeDateIsAllowed, 
      title="BUY Signal for Webhook", 
-     message="{{ticker}} - BUY Signal")
+     message='{"signal":"BUY","symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP Line 1")}},"tp2":{{plot("TP Line 2")}},"tp3":{{plot("TP Line 3")}},"stop_loss":{{plot("SL Line")}},"time":"{{time}}","timeframe":"{{interval}}"}')
+
 
 alertcondition(sellSignal and TPSType == "ATR" and tradeDateIsAllowed, 
      title="SELL Signal for Webhook", 
-     message="{{ticker}} - SELL Signal")
+     message='{"signal":"SELL","symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP Line 1")}},"tp2":{{plot("TP Line 2")}},"tp3":{{plot("TP Line 3")}},"stop_loss":{{plot("SL Line")}},"time":"{{time}}","timeframe":"{{interval}}"}')
 
 alertcondition(longTP1 and TPSType == "ATR" and tradeDateIsAllowed, 
      title="TP1 Hit for Webhook", 
-     message="{{ticker}} - TP1 Hit")
+     message='{"signal":"TP1_HIT","symbol":"{{ticker}}","entry_price":{{plot("Entry Line")}},"exit_price":{{plot("TP Line 1")}},"time":"{{time}}","timeframe":"{{interval}}"}')
 
 alertcondition(longTP2 and TPSType == "ATR" and tradeDateIsAllowed, 
      title="TP2 Hit for Webhook", 
-     message="{{ticker}} - TP2 Hit")
+     message='{"signal":"TP2_HIT","symbol":"{{ticker}}","entry_price":{{plot("Entry Line")}},"exit_price":{{plot("TP Line 2")}},"time":"{{time}}","timeframe":"{{interval}}"}')
 
 alertcondition(longTP3 and TPSType == "ATR" and tradeDateIsAllowed, 
      title="TP3 Hit for Webhook", 
-     message="{{ticker}} - TP3 Hit")
+     message='{"signal":"TP3_HIT","symbol":"{{ticker}}","entry_price":{{plot("Entry Line")}},"exit_price":{{plot("TP Line 3")}},"time":"{{time}}","timeframe":"{{interval}}"}')
 
 alertcondition(shortTP1 and TPSType == "ATR" and tradeDateIsAllowed, 
      title="TP1 Hit (Short) for Webhook", 
-     message="{{ticker}} - TP1 Hit")
+     message='{"signal":"TP1_HIT","symbol":"{{ticker}}","entry_price":{{plot("Entry Line")}},"exit_price":{{plot("TP Line 1")}},"time":"{{time}}","timeframe":"{{interval}}"}')
 
 alertcondition(shortTP2 and TPSType == "ATR" and tradeDateIsAllowed, 
      title="TP2 Hit (Short) for Webhook", 
-     message="{{ticker}} - TP2 Hit")
+     message='{"signal":"TP2_HIT","symbol":"{{ticker}}","entry_price":{{plot("Entry Line")}},"exit_price":{{plot("TP Line 2")}},"time":"{{time}}","timeframe":"{{interval}}"}')
 
 alertcondition(shortTP3 and TPSType == "ATR" and tradeDateIsAllowed, 
      title="TP3 Hit (Short) for Webhook", 
-     message="{{ticker}} - TP3 Hit")
+     message='{"signal":"TP3_HIT","symbol":"{{ticker}}","entry_price":{{plot("Entry Line")}},"exit_price":{{plot("TP Line 3")}},"time":"{{time}}","timeframe":"{{interval}}"}')
 
 alertcondition(longSL and TPSType == "ATR" and tradeDateIsAllowed, 
      title="Stop Loss Hit for Webhook", 
-     message="{{ticker}} - Stop Loss Hit")
+     message='{"signal":"STOP_LOSS","symbol":"{{ticker}}","price":{{plot("SL Line")}},"time":"{{time}}","timeframe":"{{interval}}"}')
 
 alertcondition(shortSL and TPSType == "ATR" and tradeDateIsAllowed, 
      title="Stop Loss Hit (Short) for Webhook", 
-     message="{{ticker}} - Stop Loss Hit")
+     message='{"signal":"STOP_LOSS","symbol":"{{ticker}}","price":{{plot("SL Line")}},"time":"{{time}}","timeframe":"{{interval}}"}')
 
 alertcondition(longX and tradeDateIsAllowed, 
      title="Position Closed for Webhook", 
-     message="{{ticker}} - Position Closed")
+     message='{"signal":"CLOSE","symbol":"{{ticker}}","price":{{close}},"time":"{{time}}","timeframe":"{{interval}}"}')
 
 alertcondition(shortX and tradeDateIsAllowed, 
      title="Position Closed (Short) for Webhook", 
-     message="{{ticker}} - Position Closed")
+     message='{"signal":"CLOSE","symbol":"{{ticker}}","price":{{close}},"time":"{{time}}","timeframe":"{{interval}}"}')
 
 // ==========================================================================================
