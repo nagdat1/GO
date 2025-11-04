@@ -84,25 +84,83 @@ def parse_tradingview_text_alert(text: str) -> dict:
         dict: Parsed data or None if cannot parse
     """
     try:
+        logger.info(f"Parsing text alert: {text[:200]}")
+        
         # Extract signal type (buy/sell)
-        signal_match = re.search(r'(buy|sell|BUY|SELL)', text, re.IGNORECASE)
+        signal_match = re.search(r'تم تنفيذ الأمر\s+(buy|sell|BUY|SELL)', text, re.IGNORECASE)
+        if not signal_match:
+            signal_match = re.search(r'(buy|sell|BUY|SELL)', text, re.IGNORECASE)
         if not signal_match:
             return None
         
         signal = signal_match.group(1).upper()
         
-        # Extract price
-        price_match = re.search(r'@\s*([\d.]+)', text)
-        price = float(price_match.group(1)) if price_match else 0
+        # Extract price - look for @ followed by number, then space and "على" or end
+        # Pattern: @ followed by optional whitespace, number with decimals, then space and "على"
+        # This ensures we get the price right before the symbol
+        price_match = re.search(r'@\s*([0-9]+(?:\.[0-9]+)?)\s+على', text)
+        if not price_match:
+            # Try alternative: @ number, then space and any word (symbol)
+            price_match = re.search(r'@\s*([0-9]+(?:\.[0-9]+)?)\s+([A-Z0-9]+)', text)
+            if price_match:
+                # Verify it's a reasonable price (not too large, typically < 1000000 for crypto)
+                price_str = price_match.group(1)
+                try:
+                    price_test = float(price_str)
+                    if price_test > 10000000:  # Too large, probably wrong
+                        logger.warning(f"Price {price_test} seems too large, trying different pattern")
+                        price_match = None
+                except:
+                    price_match = None
         
-        # Extract symbol
-        symbol_match = re.search(r'على\s+(\w+)', text) or re.search(r'on\s+(\w+)', text, re.IGNORECASE)
+        if not price_match:
+            # Last resort: just @ followed by number
+            price_match = re.search(r'@\s*([0-9]+(?:\.[0-9]+)?)', text)
+        
+        if price_match:
+            price_str = price_match.group(1)
+            try:
+                price = float(price_str)
+                # Sanity check: if price is too large, it's probably wrong
+                if price > 10000000:
+                    logger.warning(f"Price {price} seems incorrect, checking alternative extraction")
+                    # Try to find a more reasonable price
+                    # Look for numbers that are more reasonable (less than 1 million)
+                    alt_match = re.findall(r'([0-9]+(?:\.[0-9]+)?)', text)
+                    for num_str in alt_match:
+                        try:
+                            num = float(num_str)
+                            if 0.001 < num < 1000000:  # Reasonable price range
+                                price = num
+                                logger.info(f"Using alternative price: {price}")
+                                break
+                        except:
+                            continue
+            except ValueError:
+                logger.error(f"Could not convert price '{price_str}' to float")
+                price = 0
+        else:
+            logger.error("Could not find price in text")
+            price = 0
+        
+        # Extract symbol - look for "على" followed by symbol
+        symbol_match = re.search(r'على\s+([A-Z0-9]+)', text)
+        if not symbol_match:
+            # Try alternative pattern
+            symbol_match = re.search(r'on\s+([A-Z0-9]+)', text, re.IGNORECASE)
+        if not symbol_match:
+            # Try to find symbol at the end or after price
+            symbol_match = re.search(r'@\s*[\d.]+.*?([A-Z0-9]{4,})', text)
+        
         symbol = symbol_match.group(1) if symbol_match else "UNKNOWN"
         
         # Get current time
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
+        logger.info(f"Parsed: signal={signal}, symbol={symbol}, price={price}")
+        
         # For text alerts, we don't have TP/SL info, so we'll use basic format
+        # But we should NOT send TP/SL estimates for text alerts - they're not real
         result = {
             "signal": signal,
             "symbol": symbol,
@@ -110,17 +168,15 @@ def parse_tradingview_text_alert(text: str) -> dict:
             "price": price,  # For CLOSE and SL signals
             "time": current_time,
             "timeframe": "N/A",
-            "tp1": price * 1.01,  # Estimate 1% (will be ignored if not needed)
-            "tp2": price * 1.02,  # Estimate 2%
-            "tp3": price * 1.03,  # Estimate 3%
-            "stop_loss": price * 0.99  # Estimate 1% down
+            # Don't add fake TP/SL - they will be calculated incorrectly
+            # Only include if we have real data
         }
         
         logger.info(f"Parsed TradingView text alert: {result}")
         return result
         
     except Exception as e:
-        logger.error(f"Error parsing TradingView text alert: {e}")
+        logger.error(f"Error parsing TradingView text alert: {e}", exc_info=True)
         return None
 
 # Check configuration status (without raising error)

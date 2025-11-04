@@ -62,29 +62,41 @@ def format_buy_signal(data: dict) -> str:
     """
     symbol = data.get('symbol', 'N/A')
     entry_price = float(data.get('entry_price', 0))
-    tp1 = float(data.get('tp1', 0))
-    tp2 = float(data.get('tp2', 0))
-    tp3 = float(data.get('tp3', 0))
-    stop_loss = float(data.get('stop_loss', 0))
+    tp1 = data.get('tp1')
+    tp2 = data.get('tp2')
+    tp3 = data.get('tp3')
+    stop_loss = data.get('stop_loss')
     time = data.get('time', 'N/A')
     timeframe = data.get('timeframe', 'N/A')
-    
-    # Calculate percentages
-    tp1_pct = ((tp1 - entry_price) / entry_price) * 100 if entry_price > 0 else 0
-    tp2_pct = ((tp2 - entry_price) / entry_price) * 100 if entry_price > 0 else 0
-    tp3_pct = ((tp3 - entry_price) / entry_price) * 100 if entry_price > 0 else 0
-    sl_pct = ((stop_loss - entry_price) / entry_price) * 100 if entry_price > 0 else 0
     
     message = f"🟢🟢🟢 *BUY SIGNAL* 🟢🟢🟢\n\n"
     message += f"📊 Symbol: {symbol}\n"
     message += f"💰 Entry Price: {entry_price:.2f}\n"
     message += f"⏰ Time: {time}\n"
     message += f"📈 Timeframe: {timeframe}\n\n"
-    message += f"🎯 *Take Profit Targets:*\n"
-    message += f"🎯 TP1: {tp1:.2f} (+{tp1_pct:.2f}%)\n"
-    message += f"🎯 TP2: {tp2:.2f} (+{tp2_pct:.2f}%)\n"
-    message += f"🎯 TP3: {tp3:.2f} (+{tp3_pct:.2f}%)\n\n"
-    message += f"🛑 Stop Loss: {stop_loss:.2f} ({sl_pct:.2f}%)"
+    
+    # Only show TP/SL if they exist (from JSON data, not estimated)
+    if tp1 is not None and tp2 is not None and tp3 is not None and stop_loss is not None:
+        tp1 = float(tp1)
+        tp2 = float(tp2)
+        tp3 = float(tp3)
+        stop_loss = float(stop_loss)
+        
+        # Calculate percentages
+        tp1_pct = ((tp1 - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+        tp2_pct = ((tp2 - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+        tp3_pct = ((tp3 - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+        sl_pct = ((stop_loss - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+        
+        message += f"🎯 *Take Profit Targets:*\n"
+        message += f"🎯 TP1: {tp1:.2f} (+{tp1_pct:.2f}%)\n"
+        message += f"🎯 TP2: {tp2:.2f} (+{tp2_pct:.2f}%)\n"
+        message += f"🎯 TP3: {tp3:.2f} (+{tp3_pct:.2f}%)\n\n"
+        message += f"🛑 Stop Loss: {stop_loss:.2f} ({sl_pct:.2f}%)"
+    else:
+        # Text alert - no TP/SL data available
+        message += f"⚠️ *Note:* TP/SL data not available from text alert.\n"
+        message += f"Please use JSON format in TradingView Alert for complete data."
     
     return message
 
@@ -101,31 +113,43 @@ def format_sell_signal(data: dict) -> str:
     """
     symbol = data.get('symbol', 'N/A')
     entry_price = float(data.get('entry_price', 0))
-    tp1 = float(data.get('tp1', 0))
-    tp2 = float(data.get('tp2', 0))
-    tp3 = float(data.get('tp3', 0))
-    stop_loss = float(data.get('stop_loss', 0))
+    tp1 = data.get('tp1')
+    tp2 = data.get('tp2')
+    tp3 = data.get('tp3')
+    stop_loss = data.get('stop_loss')
     time = data.get('time', 'N/A')
     timeframe = data.get('timeframe', 'N/A')
-    
-    # Calculate percentages (for SELL, profit when price goes down)
-    # TP should be lower than entry for SELL
-    tp1_pct = ((entry_price - tp1) / entry_price) * 100 if entry_price > 0 else 0
-    tp2_pct = ((entry_price - tp2) / entry_price) * 100 if entry_price > 0 else 0
-    tp3_pct = ((entry_price - tp3) / entry_price) * 100 if entry_price > 0 else 0
-    # SL is higher than entry for SELL (loss if price goes up)
-    sl_pct = ((stop_loss - entry_price) / entry_price) * 100 if entry_price > 0 else 0
     
     message = f"🔴🔴🔴 *SELL SIGNAL* 🔴🔴🔴\n\n"
     message += f"📊 Symbol: {symbol}\n"
     message += f"💰 Entry Price: {entry_price:.2f}\n"
     message += f"⏰ Time: {time}\n"
     message += f"📈 Timeframe: {timeframe}\n\n"
-    message += f"🎯 *Take Profit Targets:*\n"
-    message += f"🎯 TP1: {tp1:.2f} (+{tp1_pct:.2f}%)\n"
-    message += f"🎯 TP2: {tp2:.2f} (+{tp2_pct:.2f}%)\n"
-    message += f"🎯 TP3: {tp3:.2f} (+{tp3_pct:.2f}%)\n\n"
-    message += f"🛑 Stop Loss: {stop_loss:.2f} ({sl_pct:.2f}%)"
+    
+    # Only show TP/SL if they exist (from JSON data, not estimated)
+    if tp1 is not None and tp2 is not None and tp3 is not None and stop_loss is not None:
+        tp1 = float(tp1)
+        tp2 = float(tp2)
+        tp3 = float(tp3)
+        stop_loss = float(stop_loss)
+        
+        # Calculate percentages (for SELL, profit when price goes down)
+        # TP should be lower than entry for SELL
+        tp1_pct = ((entry_price - tp1) / entry_price) * 100 if entry_price > 0 else 0
+        tp2_pct = ((entry_price - tp2) / entry_price) * 100 if entry_price > 0 else 0
+        tp3_pct = ((entry_price - tp3) / entry_price) * 100 if entry_price > 0 else 0
+        # SL is higher than entry for SELL (loss if price goes up)
+        sl_pct = ((stop_loss - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+        
+        message += f"🎯 *Take Profit Targets:*\n"
+        message += f"🎯 TP1: {tp1:.2f} (+{tp1_pct:.2f}%)\n"
+        message += f"🎯 TP2: {tp2:.2f} (+{tp2_pct:.2f}%)\n"
+        message += f"🎯 TP3: {tp3:.2f} (+{tp3_pct:.2f}%)\n\n"
+        message += f"🛑 Stop Loss: {stop_loss:.2f} ({sl_pct:.2f}%)"
+    else:
+        # Text alert - no TP/SL data available
+        message += f"⚠️ *Note:* TP/SL data not available from text alert.\n"
+        message += f"Please use JSON format in TradingView Alert for complete data."
     
     return message
 
