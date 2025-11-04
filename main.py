@@ -63,8 +63,8 @@ def health_check():
     }), 200
 
 
-@app.route('/webhook', methods=['POST'])
-@app.route('/personal/<chat_id>/webhook', methods=['POST'])
+@app.route('/webhook', methods=['POST', 'GET'])
+@app.route('/personal/<chat_id>/webhook', methods=['POST', 'GET'])
 def webhook(chat_id=None):
     """
     Main webhook endpoint to receive signals from TradingView
@@ -87,26 +87,84 @@ def webhook(chat_id=None):
         ...
     }
     """
+    # Handle GET requests (for testing)
+    if request.method == 'GET':
+        return jsonify({
+            "status": "ok",
+            "message": "Webhook endpoint is active",
+            "chat_id_from_url": chat_id,
+            "method": "Use POST to send signals"
+        }), 200
+    
     try:
+        # Log request details for debugging
+        logger.info(f"=== Webhook Request Received ===")
+        logger.info(f"Method: {request.method}")
+        logger.info(f"Headers: {dict(request.headers)}")
+        logger.info(f"URL: {request.url}")
+        logger.info(f"Chat ID from URL: {chat_id}")
+        
         # Get JSON data from request
         data = request.get_json()
         
+        # Also try to get data from form data (some webhooks send form data)
         if not data:
-            logger.warning("Received empty request")
-            return jsonify({"error": "No data received"}), 400
+            try:
+                data = request.form.to_dict()
+                logger.info("Received form data instead of JSON")
+            except:
+                pass
+        
+        # Also try raw data
+        if not data:
+            try:
+                raw_data = request.get_data(as_text=True)
+                logger.info(f"Raw data received: {raw_data}")
+                import json
+                data = json.loads(raw_data)
+            except:
+                pass
+        
+        if not data:
+            logger.warning("Received empty request - no JSON, form, or raw data")
+            return jsonify({
+                "error": "No data received",
+                "message": "Please send JSON data in the request body"
+            }), 400
+        
+        logger.info(f"Received data: {data}")
         
         # Get signal type
-        signal = data.get('signal', '').upper()
+        signal = data.get('signal', '')
+        if isinstance(signal, str):
+            signal = signal.upper()
         
-        logger.info(f"Received signal: {signal} for {data.get('symbol', 'N/A')}")
+        logger.info(f"Signal type: {signal}")
+        logger.info(f"Symbol: {data.get('symbol', 'N/A')}")
         
         # Validate configuration before processing
         config_status = get_config_status()
-        if not config_status["all_set"]:
-            logger.error("Cannot process webhook: Configuration incomplete")
+        logger.info(f"Config status: {config_status}")
+        
+        # Determine target chat_id
+        target_chat_id = chat_id
+        if not target_chat_id and config_status.get('telegram_chat_id'):
+            from config import TELEGRAM_CHAT_ID
+            target_chat_id = TELEGRAM_CHAT_ID
+        logger.info(f"Target chat_id: {target_chat_id}")
+        
+        if not config_status["telegram_bot_token"]:
+            logger.error("TELEGRAM_BOT_TOKEN is not set")
             return jsonify({
                 "status": "error",
-                "message": "Configuration incomplete. Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID environment variables."
+                "message": "TELEGRAM_BOT_TOKEN is not configured"
+            }), 500
+        
+        if not target_chat_id:
+            logger.error("No chat_id available (neither from URL nor config)")
+            return jsonify({
+                "status": "error",
+                "message": "No chat_id available. Please provide chat_id in URL or set TELEGRAM_CHAT_ID"
             }), 500
         
         # Route to appropriate formatter based on signal type
@@ -132,31 +190,40 @@ def webhook(chat_id=None):
         
         # Send message to Telegram (use chat_id from URL if provided)
         if message:
-            success = send_message(message, chat_id=chat_id)
+            logger.info(f"Formatted message length: {len(message)} characters")
+            logger.info(f"Sending message to chat_id: {target_chat_id}")
+            success = send_message(message, chat_id=target_chat_id)
             if success:
-                logger.info(f"Successfully sent {signal} signal to Telegram")
+                logger.info(f"✅ Successfully sent {signal} signal to Telegram")
                 return jsonify({
                     "status": "success",
-                    "message": "Signal sent to Telegram"
+                    "message": "Signal sent to Telegram",
+                    "signal": signal,
+                    "chat_id": target_chat_id
                 }), 200
             else:
-                logger.error(f"Failed to send {signal} signal to Telegram")
+                logger.error(f"❌ Failed to send {signal} signal to Telegram")
                 return jsonify({
                     "status": "error",
-                    "message": "Failed to send message to Telegram"
+                    "message": "Failed to send message to Telegram. Check logs for details.",
+                    "signal": signal
                 }), 500
         else:
-            logger.error("Failed to format message")
+            logger.error("Failed to format message - message is None or empty")
             return jsonify({
                 "status": "error",
-                "message": "Failed to format message"
+                "message": "Failed to format message",
+                "signal": signal
             }), 500
             
     except Exception as e:
-        logger.error(f"Error processing webhook: {e}", exc_info=True)
+        logger.error(f"❌ Error processing webhook: {e}", exc_info=True)
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({
             "status": "error",
-            "message": str(e)
+            "message": str(e),
+            "error_type": type(e).__name__
         }), 500
 
 
