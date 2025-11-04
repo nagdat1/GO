@@ -13,7 +13,7 @@ from telegram_bot import (
     format_stop_loss_hit,
     format_position_closed
 )
-from config import validate_config, WEBHOOK_PORT, DEBUG
+from config import WEBHOOK_PORT, DEBUG, get_config_status
 import logging
 
 # Configure logging
@@ -26,21 +26,28 @@ logger = logging.getLogger(__name__)
 # Initialize Flask app
 app = Flask(__name__)
 
-# Validate configuration on startup
-try:
-    validate_config()
+# Check configuration status (without raising error)
+from config import get_config_status
+config_status = get_config_status()
+if config_status["all_set"]:
     logger.info("Configuration validated successfully")
-except ValueError as e:
-    logger.error(f"Configuration error: {e}")
-    raise
+else:
+    logger.warning("⚠️ Configuration incomplete. Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID environment variables.")
+    logger.warning(f"Telegram Bot Token: {'✓ Set' if config_status['telegram_bot_token'] else '✗ Missing'}")
+    logger.warning(f"Telegram Chat ID: {'✓ Set' if config_status['telegram_chat_id'] else '✗ Missing'}")
 
 
 @app.route('/', methods=['GET'])
 def health_check():
     """Health check endpoint"""
+    config_status = get_config_status()
     return jsonify({
         "status": "ok",
-        "message": "TradingView Webhook to Telegram Bot is running"
+        "message": "TradingView Webhook to Telegram Bot is running",
+        "config": {
+            "telegram_bot_token": "✓ Set" if config_status['telegram_bot_token'] else "✗ Missing",
+            "telegram_chat_id": "✓ Set" if config_status['telegram_chat_id'] else "✗ Missing"
+        }
     }), 200
 
 
@@ -75,6 +82,15 @@ def webhook():
         signal = data.get('signal', '').upper()
         
         logger.info(f"Received signal: {signal} for {data.get('symbol', 'N/A')}")
+        
+        # Validate configuration before processing
+        config_status = get_config_status()
+        if not config_status["all_set"]:
+            logger.error("Cannot process webhook: Configuration incomplete")
+            return jsonify({
+                "status": "error",
+                "message": "Configuration incomplete. Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID environment variables."
+            }), 500
         
         # Route to appropriate formatter based on signal type
         message = None

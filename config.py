@@ -34,3 +34,13 @@ def validate_config():
     
     return True
 
+
+def get_config_status():
+    """Get configuration status without raising errors"""
+    status = {
+        "telegram_bot_token": bool(TELEGRAM_BOT_TOKEN),
+        "telegram_chat_id": bool(TELEGRAM_CHAT_ID),
+        "all_set": bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)
+    }
+    return status
+
