@@ -121,22 +121,43 @@ def parse_tradingview_text_alert(text: str) -> dict:
         if price_match:
             price_str = price_match.group(1)
             try:
-                price = float(price_str)
-                # Sanity check: if price is too large, it's probably wrong
-                if price > 10000000:
-                    logger.warning(f"Price {price} seems incorrect, checking alternative extraction")
-                    # Try to find a more reasonable price
-                    # Look for numbers that are more reasonable (less than 1 million)
-                    alt_match = re.findall(r'([0-9]+(?:\.[0-9]+)?)', text)
-                    for num_str in alt_match:
+                extracted_value = float(price_str)
+                
+                # ⚠️ CRITICAL: Check if extracted value is Position Size (too large) instead of Price
+                # Position Size typically > 100,000 for crypto, while prices are usually < 100,000
+                # Most crypto prices are between 0.000001 and 100,000
+                # If it's too large (> 100,000), it's likely Position Size, not Price
+                if extracted_value > 100000:
+                    logger.warning(f"⚠️ Extracted value {extracted_value:,.2f} is too large - likely Position Size, not Price!")
+                    logger.warning(f"⚠️ Position Size = حجم المركز (Volume) ❌")
+                    logger.warning(f"⚠️ Price = سعر العملة الحقيقي (Real Price) ✅")
+                    logger.warning(f"⚠️ Cannot extract real price from text alert. Price will be set to 0.")
+                    logger.warning(f"⚠️ SOLUTION: Use JSON format in TradingView Alert Message field to get real price.")
+                    
+                    # Set price to 0 to indicate we couldn't get real price
+                    price = 0
+                    
+                    # Try to find a reasonable number in the text (might be timeframe or other value)
+                    # But don't use it as price - it's not reliable
+                    all_numbers = re.findall(r'([0-9]+(?:\.[0-9]+)?)', text)
+                    reasonable_numbers = []
+                    for num_str in all_numbers:
                         try:
                             num = float(num_str)
-                            if 0.001 < num < 1000000:  # Reasonable price range
-                                price = num
-                                logger.info(f"Using alternative price: {price}")
-                                break
+                            # Look for numbers that could be prices (0.000001 to 100,000)
+                            # Exclude very small numbers that are likely percentages or other values
+                            if 0.0001 <= num <= 100000:
+                                reasonable_numbers.append(num)
                         except:
                             continue
+                    
+                    if reasonable_numbers:
+                        logger.info(f"Found reasonable numbers in text: {reasonable_numbers[:5]} (but not using as price - unreliable from text)")
+                else:
+                    # Value seems reasonable for a price
+                    price = extracted_value
+                    logger.info(f"✅ Extracted price: {price}")
+                    
             except ValueError:
                 logger.error(f"Could not convert price '{price_str}' to float")
                 price = 0
@@ -160,18 +181,67 @@ def parse_tradingview_text_alert(text: str) -> dict:
         
         logger.info(f"Parsed: signal={signal}, symbol={symbol}, price={price}")
         
-        # For text alerts, we don't have TP/SL info, so we'll use basic format
-        # But we should NOT send TP/SL estimates for text alerts - they're not real
+        # ⚠️ IMPORTANT: If price is 0, it means we couldn't extract real price
+        # (likely because text contained Position Size instead of Price)
+        if price == 0:
+            logger.error("❌ Cannot calculate TP/SL - real price not available from text alert")
+            logger.error("❌ Text alert likely contains Position Size instead of Price")
+            logger.error("❌ SOLUTION: Use JSON format in TradingView Alert Message field")
+            tp1 = tp2 = tp3 = stop_loss = None
+        # Calculate estimated TP/SL based on ATR-like logic (similar to Pine Script)
+        # Using the same factors as the Pine Script: profitFactor = 2.5
+        # Note: This is an ESTIMATE - real TP/SL comes from JSON alerts only
+        # For accurate TP/SL, use JSON format in TradingView Alert Message field
+        elif price > 0 and signal in ['BUY', 'SELL']:
+            # Estimate ATR as percentage of price (adaptive based on price range)
+            # For very high prices (>1M), use smaller percentage
+            if price > 1000000:
+                atr_percent = 0.005  # 0.5% for very high prices
+            elif price > 10000:
+                atr_percent = 0.01   # 1% for medium prices
+            else:
+                atr_percent = 0.02   # 2% for lower prices
+            
+            estimated_atr = price * atr_percent
+            profit_factor = 2.5
+            
+            if signal == 'BUY':
+                # For BUY: TP above entry, SL below entry
+                tp1 = price + (1 * profit_factor * estimated_atr)
+                tp2 = price + (2 * profit_factor * estimated_atr)
+                tp3 = price + (3 * profit_factor * estimated_atr)
+                stop_loss = price - (1 * profit_factor * estimated_atr)
+            else:  # SELL
+                # For SELL: TP below entry (price goes down), SL above entry
+                tp1 = price - (1 * profit_factor * estimated_atr)
+                tp2 = price - (2 * profit_factor * estimated_atr)
+                tp3 = price - (3 * profit_factor * estimated_atr)
+                stop_loss = price + (1 * profit_factor * estimated_atr)
+        else:
+            tp1 = tp2 = tp3 = stop_loss = None
+        
+        # Extract timeframe from text if possible (look for common patterns)
+        timeframe = "N/A"
+        timeframe_match = re.search(r'(\d+[mhdw])', text, re.IGNORECASE)
+        if timeframe_match:
+            timeframe = timeframe_match.group(1)
+        
         result = {
             "signal": signal,
             "symbol": symbol,
             "entry_price": price,
             "price": price,  # For CLOSE and SL signals
             "time": current_time,
-            "timeframe": "N/A",
-            # Don't add fake TP/SL - they will be calculated incorrectly
-            # Only include if we have real data
+            "timeframe": timeframe,
         }
+        
+        # Add TP/SL if calculated
+        if tp1 is not None:
+            result["tp1"] = tp1
+            result["tp2"] = tp2
+            result["tp3"] = tp3
+            result["stop_loss"] = stop_loss
+            logger.info(f"Calculated estimated TP/SL: TP1={tp1:.2f}, TP2={tp2:.2f}, TP3={tp3:.2f}, SL={stop_loss:.2f}")
         
         logger.info(f"Parsed TradingView text alert: {result}")
         return result

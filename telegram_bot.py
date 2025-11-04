@@ -11,6 +11,40 @@ logger = logging.getLogger(__name__)
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
 
 
+def format_price(price: float) -> str:
+    """
+    Format price with appropriate decimal places based on price range
+    
+    Args:
+        price: Price value to format
+        
+    Returns:
+        str: Formatted price string
+    """
+    if price == 0:
+        return "0.00"
+    
+    # For very high prices (> 1000): show 0-2 decimal places
+    if price >= 1000:
+        # Round to nearest integer or 1-2 decimals
+        if price >= 10000:
+            return f"{price:,.0f}"  # No decimals, with commas
+        else:
+            return f"{price:,.2f}"  # 2 decimals with commas
+    
+    # For medium prices (1-1000): show 2-4 decimal places
+    elif price >= 1:
+        return f"{price:,.2f}"  # 2 decimals with commas
+    
+    # For low prices (0.01-1): show 4-6 decimal places
+    elif price >= 0.01:
+        return f"{price:.4f}"  # 4 decimals
+    
+    # For very low prices (< 0.01): show 6-8 decimal places
+    else:
+        return f"{price:.8f}".rstrip('0').rstrip('.')  # Up to 8 decimals, remove trailing zeros
+
+
 def send_message(message: str, chat_id: str = None) -> bool:
     """
     Send message to Telegram chat
@@ -71,7 +105,14 @@ def format_buy_signal(data: dict) -> str:
     
     message = f"🟢🟢🟢 *BUY SIGNAL* 🟢🟢🟢\n\n"
     message += f"📊 Symbol: {symbol}\n"
-    message += f"💰 Entry Price: {entry_price:.2f}\n"
+    
+    # Check if price is valid (not 0, which means Position Size was extracted instead of Price)
+    if entry_price == 0:
+        message += f"⚠️ *Entry Price: NOT AVAILABLE*\n"
+        message += f"❌ Text alert contains Position Size instead of Price!\n\n"
+    else:
+        message += f"💰 Entry Price: {format_price(entry_price)}\n"
+    
     message += f"⏰ Time: {time}\n"
     message += f"📈 Timeframe: {timeframe}\n\n"
     
@@ -89,14 +130,22 @@ def format_buy_signal(data: dict) -> str:
         sl_pct = ((stop_loss - entry_price) / entry_price) * 100 if entry_price > 0 else 0
         
         message += f"🎯 *Take Profit Targets:*\n"
-        message += f"🎯 TP1: {tp1:.2f} (+{tp1_pct:.2f}%)\n"
-        message += f"🎯 TP2: {tp2:.2f} (+{tp2_pct:.2f}%)\n"
-        message += f"🎯 TP3: {tp3:.2f} (+{tp3_pct:.2f}%)\n\n"
-        message += f"🛑 Stop Loss: {stop_loss:.2f} ({sl_pct:.2f}%)"
+        message += f"🎯 TP1: {format_price(tp1)} (+{tp1_pct:.2f}%)\n"
+        message += f"🎯 TP2: {format_price(tp2)} (+{tp2_pct:.2f}%)\n"
+        message += f"🎯 TP3: {format_price(tp3)} (+{tp3_pct:.2f}%)\n\n"
+        message += f"🛑 Stop Loss: {format_price(stop_loss)} ({sl_pct:.2f}%)"
     else:
         # Text alert - no TP/SL data available
-        message += f"⚠️ *Note:* TP/SL data not available from text alert.\n"
-        message += f"Please use JSON format in TradingView Alert for complete data."
+        if entry_price == 0:
+            message += f"⚠️ *ERROR:* Real price not available!\n"
+            message += f"📌 Text alert contains Position Size instead of Price.\n"
+            message += f"📌 Position Size: حجم المركز (Volume) ❌\n"
+            message += f"📌 Price: سعر العملة الحقيقي ✅\n\n"
+            message += f"✅ *SOLUTION:* Use JSON format in TradingView Alert Message field.\n"
+            message += f"📖 See README.md for instructions."
+        else:
+            message += f"⚠️ *Note:* TP/SL data not available from text alert.\n"
+            message += f"Please use JSON format in TradingView Alert for complete data."
     
     return message
 
@@ -122,7 +171,14 @@ def format_sell_signal(data: dict) -> str:
     
     message = f"🔴🔴🔴 *SELL SIGNAL* 🔴🔴🔴\n\n"
     message += f"📊 Symbol: {symbol}\n"
-    message += f"💰 Entry Price: {entry_price:.2f}\n"
+    
+    # Check if price is valid (not 0, which means Position Size was extracted instead of Price)
+    if entry_price == 0:
+        message += f"⚠️ *Entry Price: NOT AVAILABLE*\n"
+        message += f"❌ Text alert contains Position Size instead of Price!\n\n"
+    else:
+        message += f"💰 Entry Price: {format_price(entry_price)}\n"
+    
     message += f"⏰ Time: {time}\n"
     message += f"📈 Timeframe: {timeframe}\n\n"
     
@@ -142,14 +198,22 @@ def format_sell_signal(data: dict) -> str:
         sl_pct = ((stop_loss - entry_price) / entry_price) * 100 if entry_price > 0 else 0
         
         message += f"🎯 *Take Profit Targets:*\n"
-        message += f"🎯 TP1: {tp1:.2f} (+{tp1_pct:.2f}%)\n"
-        message += f"🎯 TP2: {tp2:.2f} (+{tp2_pct:.2f}%)\n"
-        message += f"🎯 TP3: {tp3:.2f} (+{tp3_pct:.2f}%)\n\n"
-        message += f"🛑 Stop Loss: {stop_loss:.2f} ({sl_pct:.2f}%)"
+        message += f"🎯 TP1: {format_price(tp1)} (+{tp1_pct:.2f}%)\n"
+        message += f"🎯 TP2: {format_price(tp2)} (+{tp2_pct:.2f}%)\n"
+        message += f"🎯 TP3: {format_price(tp3)} (+{tp3_pct:.2f}%)\n\n"
+        message += f"🛑 Stop Loss: {format_price(stop_loss)} ({sl_pct:.2f}%)"
     else:
         # Text alert - no TP/SL data available
-        message += f"⚠️ *Note:* TP/SL data not available from text alert.\n"
-        message += f"Please use JSON format in TradingView Alert for complete data."
+        if entry_price == 0:
+            message += f"⚠️ *ERROR:* Real price not available!\n"
+            message += f"📌 Text alert contains Position Size instead of Price.\n"
+            message += f"📌 Position Size: حجم المركز (Volume) ❌\n"
+            message += f"📌 Price: سعر العملة الحقيقي ✅\n\n"
+            message += f"✅ *SOLUTION:* Use JSON format in TradingView Alert Message field.\n"
+            message += f"📖 See README.md for instructions."
+        else:
+            message += f"⚠️ *Note:* TP/SL data not available from text alert.\n"
+            message += f"Please use JSON format in TradingView Alert for complete data."
     
     return message
 
@@ -178,8 +242,8 @@ def format_tp1_hit(data: dict) -> str:
     
     message = f"🎯✅🎯 *TP1 - FIRST TARGET HIT* 🎯✅🎯\n\n"
     message += f"📊 Symbol: {symbol}\n"
-    message += f"💰 Entry Price: {entry_price:.2f}\n"
-    message += f"💰 Exit Price: {exit_price:.2f}\n"
+    message += f"💰 Entry Price: {format_price(entry_price)}\n"
+    message += f"💰 Exit Price: {format_price(exit_price)}\n"
     message += f"💵 Profit: +{profit_pct:.2f}%\n"
     message += f"⏰ Time: {time}\n"
     message += f"📈 Timeframe: {timeframe}"
@@ -210,8 +274,8 @@ def format_tp2_hit(data: dict) -> str:
     
     message = f"🎯✅🎯 *TP2 - SECOND TARGET HIT* 🎯✅🎯\n\n"
     message += f"📊 Symbol: {symbol}\n"
-    message += f"💰 Entry Price: {entry_price:.2f}\n"
-    message += f"💰 Exit Price: {exit_price:.2f}\n"
+    message += f"💰 Entry Price: {format_price(entry_price)}\n"
+    message += f"💰 Exit Price: {format_price(exit_price)}\n"
     message += f"💵 Profit: +{profit_pct:.2f}%\n"
     message += f"⏰ Time: {time}\n"
     message += f"📈 Timeframe: {timeframe}"
@@ -242,8 +306,8 @@ def format_tp3_hit(data: dict) -> str:
     
     message = f"🎯✅🎯 *TP3 - THIRD TARGET HIT* 🎯✅🎯\n\n"
     message += f"📊 Symbol: {symbol}\n"
-    message += f"💰 Entry Price: {entry_price:.2f}\n"
-    message += f"💰 Exit Price: {exit_price:.2f}\n"
+    message += f"💰 Entry Price: {format_price(entry_price)}\n"
+    message += f"💰 Exit Price: {format_price(exit_price)}\n"
     message += f"💵 Profit: +{profit_pct:.2f}%\n"
     message += f"⏰ Time: {time}\n"
     message += f"📈 Timeframe: {timeframe}"
@@ -260,7 +324,7 @@ def format_stop_loss_hit(data: dict) -> str:
     
     message = f"🛑😔🛑 *STOP LOSS HIT* 🛑😔🛑\n\n"
     message += f"📊 Symbol: {symbol}\n"
-    message += f"💰 Price: {price:.2f}\n"
+    message += f"💰 Price: {format_price(price)}\n"
     message += f"⏰ Time: {time}\n"
     message += f"📈 Timeframe: {timeframe}"
     
@@ -276,7 +340,7 @@ def format_position_closed(data: dict) -> str:
     
     message = f"🔚📊🔚 *POSITION CLOSED* 🔚📊🔚\n\n"
     message += f"📊 Symbol: {symbol}\n"
-    message += f"💰 Price: {price:.2f}\n"
+    message += f"💰 Price: {format_price(price)}\n"
     message += f"⏰ Time: {time}\n"
     message += f"📈 Timeframe: {timeframe}"
     
