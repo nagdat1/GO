@@ -163,7 +163,18 @@ def format_tp1_hit(data: dict) -> str:
     timeframe = data.get('timeframe', 'N/A')
     
     # Calculate profit percentage
-    profit_pct = ((exit_price - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+    # For BUY: exit_price > entry_price (profit when price goes up)
+    # For SELL: exit_price < entry_price (profit when price goes down)
+    # Use absolute value since we know TP was hit (profit scenario)
+    if entry_price > 0:
+        if exit_price > entry_price:
+            # BUY position - profit when exit is higher
+            profit_pct = ((exit_price - entry_price) / entry_price) * 100
+        else:
+            # SELL position - profit when exit is lower
+            profit_pct = ((entry_price - exit_price) / entry_price) * 100
+    else:
+        profit_pct = 0
     
     message = f"🎯✅🎯 *TP1 - FIRST TARGET HIT* 🎯✅🎯\n\n"
     message += f"📊 Symbol: {symbol}\n"
@@ -185,7 +196,17 @@ def format_tp2_hit(data: dict) -> str:
     timeframe = data.get('timeframe', 'N/A')
     
     # Calculate profit percentage
-    profit_pct = ((exit_price - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+    # For BUY: exit_price > entry_price (profit when price goes up)
+    # For SELL: exit_price < entry_price (profit when price goes down)
+    if entry_price > 0:
+        if exit_price > entry_price:
+            # BUY position - profit when exit is higher
+            profit_pct = ((exit_price - entry_price) / entry_price) * 100
+        else:
+            # SELL position - profit when exit is lower
+            profit_pct = ((entry_price - exit_price) / entry_price) * 100
+    else:
+        profit_pct = 0
     
     message = f"🎯✅🎯 *TP2 - SECOND TARGET HIT* 🎯✅🎯\n\n"
     message += f"📊 Symbol: {symbol}\n"
@@ -207,7 +228,17 @@ def format_tp3_hit(data: dict) -> str:
     timeframe = data.get('timeframe', 'N/A')
     
     # Calculate profit percentage
-    profit_pct = ((exit_price - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+    # For BUY: exit_price > entry_price (profit when price goes up)
+    # For SELL: exit_price < entry_price (profit when price goes down)
+    if entry_price > 0:
+        if exit_price > entry_price:
+            # BUY position - profit when exit is higher
+            profit_pct = ((exit_price - entry_price) / entry_price) * 100
+        else:
+            # SELL position - profit when exit is lower
+            profit_pct = ((entry_price - exit_price) / entry_price) * 100
+    else:
+        profit_pct = 0
     
     message = f"🎯✅🎯 *TP3 - THIRD TARGET HIT* 🎯✅🎯\n\n"
     message += f"📊 Symbol: {symbol}\n"

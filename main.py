@@ -18,6 +18,7 @@ import logging
 import re
 from datetime import datetime
 import hashlib
+import threading
 
 # Configure logging
 logging.basicConfig(
@@ -183,17 +184,56 @@ def parse_tradingview_text_alert(text: str) -> dict:
 from config import get_config_status
 from telegram_bot import send_startup_message
 import time
+import os
+
+# Flag to track if startup message was sent (prevents duplicate messages)
+_startup_message_sent = False
+_startup_message_lock = threading.Lock()
 
 config_status = get_config_status()
 if config_status["all_set"]:
     logger.info("Configuration validated successfully")
-    # Send startup message after a short delay to ensure app is fully started
+    
+    # Use a file-based lock to prevent duplicate messages across workers
+    # This ensures only one startup message is sent even with multiple workers
+    startup_lock_file = '/tmp/startup_message_sent.lock'
+    
     def send_startup_delayed():
-        time.sleep(2)  # Wait 2 seconds for app to fully start
-        send_startup_message()
+        global _startup_message_sent
+        
+        # Check file lock first
+        if os.path.exists(startup_lock_file):
+            try:
+                # Check if file is recent (less than 60 seconds old)
+                file_age = time.time() - os.path.getmtime(startup_lock_file)
+                if file_age < 60:
+                    logger.info("Startup message already sent recently, skipping")
+                    return
+            except:
+                pass
+        
+        time.sleep(3)  # Wait 3 seconds for app to fully start
+        
+        with _startup_message_lock:
+            if not _startup_message_sent:
+                try:
+                    # Create lock file
+                    with open(startup_lock_file, 'w') as f:
+                        f.write(str(time.time()))
+                    
+                    if send_startup_message():
+                        _startup_message_sent = True
+                        logger.info("Startup message sent successfully")
+                    else:
+                        # Remove lock file if sending failed
+                        if os.path.exists(startup_lock_file):
+                            os.remove(startup_lock_file)
+                except Exception as e:
+                    logger.error(f"Error sending startup message: {e}")
+                    if os.path.exists(startup_lock_file):
+                        os.remove(startup_lock_file)
     
     # Send startup message in background
-    import threading
     startup_thread = threading.Thread(target=send_startup_delayed, daemon=True)
     startup_thread.start()
 else:
@@ -262,19 +302,26 @@ def webhook(chat_id=None):
         
         # Try to get data - TradingView sends as text/plain, not application/json
         # Method 1: Try to get raw data first (for text/plain content type)
+        # TradingView now sends JSON directly from alert() function
         try:
             raw_data = request.get_data(as_text=True)
-            logger.info(f"Raw data received: {raw_data}")
+            logger.info(f"Raw data received (first 200 chars): {raw_data[:200] if raw_data else 'Empty'}")
             if raw_data:
                 import json
-                data = json.loads(raw_data)
-                logger.info("Successfully parsed JSON from raw data")
+                # Strip whitespace before/after JSON (TradingView might add extra spaces)
+                raw_data_cleaned = raw_data.strip()
+                # Try to parse JSON
+                data = json.loads(raw_data_cleaned)
+                logger.info("✅ Successfully parsed JSON from raw data")
+                logger.info(f"Parsed JSON keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
         except json.JSONDecodeError as e:
             logger.warning(f"Failed to parse raw data as JSON: {e}")
+            logger.info(f"Raw data preview: {raw_data[:100] if raw_data else 'Empty'}")
             # Try to parse as form data
             try:
                 data = request.form.to_dict()
-                logger.info("Parsed as form data instead")
+                if data:
+                    logger.info("Parsed as form data instead")
             except:
                 pass
         except Exception as e:

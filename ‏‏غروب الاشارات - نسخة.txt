@@ -497,7 +497,11 @@ if strategy.position_size <= 0 and longE and TPSType == "ATR" and tradeDateIsAll
     msgBuy := msgBuy + "🎯 TP3: " + tp3Text + "\n\n"
     msgBuy := msgBuy + "🛑 Stop Loss: " + slText
     
-    alert(msgBuy, alert.freq_once_per_bar_close)
+    // JSON format for Webhook - send JSON directly in alert for webhook compatibility
+    jsonBuy = '{"signal":"BUY","symbol":"' + syminfo.ticker + '","entry_price":' + str.tostring(close, "#.##") + ',"tp1":' + str.tostring(tp1Line, "#.##") + ',"tp2":' + str.tostring(tp2Line, "#.##") + ',"tp3":' + str.tostring(tp3Line, "#.##") + ',"stop_loss":' + str.tostring(slLine, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
+    
+    // Send JSON instead of formatted text for webhook compatibility
+    alert(jsonBuy, alert.freq_once_per_bar_close)
 if strategy.position_size > 0 and condition ==  1.0 and TPSType == "ATR" and tradeDateIsAllowed
     strategy.exit(id = 'LXTP1', from_entry = 'Long', qty_percent = i_lxQtyTP1, limit = tp1Line, stop = slLine, comment_profit = 'LXTP1', comment_loss = 'SL')
     // 🎯 TP1 Target Hit
@@ -513,7 +517,10 @@ if strategy.position_size > 0 and condition ==  1.0 and TPSType == "ATR" and tra
         msgTP1 := msgTP1 + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
         msgTP1 := msgTP1 + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
         
-        alert(msgTP1, alert.freq_once_per_bar_close)
+        // JSON format for Webhook (Long TP1) - send JSON directly
+        jsonTP1Long = '{"signal":"TP1_HIT","symbol":"' + syminfo.ticker + '","entry_price":' + str.tostring(entryLine, "#.##") + ',"exit_price":' + str.tostring(tp1Line, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
+        
+        alert(jsonTP1Long, alert.freq_once_per_bar_close)
     // 🛑 Stop Loss Hit
     if longSL
         msgSL = "🛑😔🛑 *STOP LOSS HIT* 🛑😔🛑\n\n"
@@ -522,7 +529,10 @@ if strategy.position_size > 0 and condition ==  1.0 and TPSType == "ATR" and tra
         msgSL := msgSL + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
         msgSL := msgSL + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
         
-        alert(msgSL, alert.freq_once_per_bar_close)
+        // JSON format for Webhook (Long SL) - send JSON directly
+        jsonSLLong = '{"signal":"STOP_LOSS","symbol":"' + syminfo.ticker + '","price":' + str.tostring(close, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
+        
+        alert(jsonSLLong, alert.freq_once_per_bar_close)
 if strategy.position_size > 0 and condition ==  1.1 and TPSType == "ATR" and tradeDateIsAllowed
     strategy.exit(id = 'LXTP2', from_entry = 'Long', qty_percent = i_lxQtyTP2, limit = tp2Line, stop = slLine, comment_profit = 'LXTP2', comment_loss = 'SL')
     // 🎯 TP2 Target Hit
@@ -538,7 +548,10 @@ if strategy.position_size > 0 and condition ==  1.1 and TPSType == "ATR" and tra
         msgTP2 := msgTP2 + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
         msgTP2 := msgTP2 + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
         
-        alert(msgTP2, alert.freq_once_per_bar_close)
+        // JSON format for Webhook (Long TP2) - send JSON directly
+        jsonTP2Long = '{"signal":"TP2_HIT","symbol":"' + syminfo.ticker + '","entry_price":' + str.tostring(entryLine, "#.##") + ',"exit_price":' + str.tostring(tp2Line, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
+        
+        alert(jsonTP2Long, alert.freq_once_per_bar_close)
 if strategy.position_size > 0 and condition ==  1.2 and TPSType == "ATR" and tradeDateIsAllowed
     strategy.exit(id = 'LXTP3', from_entry = 'Long', qty_percent = i_lxQtyTP3, limit = tp3Line, stop = slLine, comment_profit = 'LXTP3', comment_loss = 'SL')
     // 🎯 TP3 Target Hit
@@ -554,7 +567,10 @@ if strategy.position_size > 0 and condition ==  1.2 and TPSType == "ATR" and tra
         msgTP3 := msgTP3 + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
         msgTP3 := msgTP3 + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
         
-        alert(msgTP3, alert.freq_once_per_bar_close)
+        // JSON format for Webhook (Long TP3) - send JSON directly
+        jsonTP3Long = '{"signal":"TP3_HIT","symbol":"' + syminfo.ticker + '","entry_price":' + str.tostring(entryLine, "#.##") + ',"exit_price":' + str.tostring(tp3Line, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
+        
+        alert(jsonTP3Long, alert.freq_once_per_bar_close)
 if longX and tradeDateIsAllowed
     strategy.close('Long', comment = 'LX')
     // ⚪ Position Closed
@@ -564,7 +580,10 @@ if longX and tradeDateIsAllowed
     msgClose := msgClose + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
     msgClose := msgClose + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
     
-    alert(msgClose, alert.freq_once_per_bar_close)
+    // JSON format for Webhook (Long Close) - send JSON directly
+    jsonCloseLong = '{"signal":"CLOSE","symbol":"' + syminfo.ticker + '","price":' + str.tostring(close, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
+    
+    alert(jsonCloseLong, alert.freq_once_per_bar_close)
 //<short orders>
 if strategy.position_size >= 0 and shortE and TPSType == "ATR" and tradeDateIsAllowed
     strategy.entry('Short', strategy.short, comment = 'SE')
@@ -593,7 +612,11 @@ if strategy.position_size >= 0 and shortE and TPSType == "ATR" and tradeDateIsAl
     msgSell := msgSell + "🎯 TP3: " + tp3Text + "\n\n"
     msgSell := msgSell + "🛑 Stop Loss: " + slText
     
-    alert(msgSell, alert.freq_once_per_bar_close)
+    // JSON format for Webhook - send JSON directly in alert for webhook compatibility
+    jsonSell = '{"signal":"SELL","symbol":"' + syminfo.ticker + '","entry_price":' + str.tostring(close, "#.##") + ',"tp1":' + str.tostring(tp1Line, "#.##") + ',"tp2":' + str.tostring(tp2Line, "#.##") + ',"tp3":' + str.tostring(tp3Line, "#.##") + ',"stop_loss":' + str.tostring(slLine, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
+    
+    // Send JSON instead of formatted text for webhook compatibility
+    alert(jsonSell, alert.freq_once_per_bar_close)
 if strategy.position_size < 0 and condition == -1.0 and TPSType == "ATR" and tradeDateIsAllowed
     strategy.exit(id = 'SXTP1', from_entry = 'Short', qty_percent = i_sxQtyTP1, limit = tp1Line, stop = slLine, comment_profit = 'SXTP1', comment_loss = 'SL')
     // 🎯 TP1 Target Hit (Short)
@@ -609,7 +632,10 @@ if strategy.position_size < 0 and condition == -1.0 and TPSType == "ATR" and tra
         msgTP1 := msgTP1 + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
         msgTP1 := msgTP1 + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
         
-        alert(msgTP1, alert.freq_once_per_bar_close)
+        // JSON format for Webhook (Short TP1) - send JSON directly
+        jsonTP1Short = '{"signal":"TP1_HIT","symbol":"' + syminfo.ticker + '","entry_price":' + str.tostring(entryLine, "#.##") + ',"exit_price":' + str.tostring(tp1Line, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
+        
+        alert(jsonTP1Short, alert.freq_once_per_bar_close)
     // 🛑 Stop Loss Hit (Short)
     if shortSL
         msgSL = "🛑😔🛑 *STOP LOSS HIT* 🛑😔🛑\n\n"
@@ -618,7 +644,10 @@ if strategy.position_size < 0 and condition == -1.0 and TPSType == "ATR" and tra
         msgSL := msgSL + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
         msgSL := msgSL + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
         
-        alert(msgSL, alert.freq_once_per_bar_close)
+        // JSON format for Webhook (Short SL) - send JSON directly
+        jsonSLShort = '{"signal":"STOP_LOSS","symbol":"' + syminfo.ticker + '","price":' + str.tostring(close, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
+        
+        alert(jsonSLShort, alert.freq_once_per_bar_close)
 if strategy.position_size < 0 and condition == -1.1 and TPSType == "ATR" and tradeDateIsAllowed
     strategy.exit(id = 'SXTP2', from_entry = 'Short', qty_percent = i_sxQtyTP2, limit = tp2Line, stop = slLine, comment_profit = 'SXTP2', comment_loss = 'SL')
     // 🎯 TP2 Target Hit (Short)
@@ -634,7 +663,10 @@ if strategy.position_size < 0 and condition == -1.1 and TPSType == "ATR" and tra
         msgTP2 := msgTP2 + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
         msgTP2 := msgTP2 + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
         
-        alert(msgTP2, alert.freq_once_per_bar_close)
+        // JSON format for Webhook (Short TP2) - send JSON directly
+        jsonTP2Short = '{"signal":"TP2_HIT","symbol":"' + syminfo.ticker + '","entry_price":' + str.tostring(entryLine, "#.##") + ',"exit_price":' + str.tostring(tp2Line, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
+        
+        alert(jsonTP2Short, alert.freq_once_per_bar_close)
 if strategy.position_size < 0 and condition == -1.2 and TPSType == "ATR" and tradeDateIsAllowed
     strategy.exit(id = 'SXTP3', from_entry = 'Short', qty_percent = i_sxQtyTP3, limit = tp3Line, stop = slLine, comment_profit = 'SXTP3', comment_loss = 'SL')
     // 🎯 TP3 Target Hit (Short)
@@ -650,7 +682,10 @@ if strategy.position_size < 0 and condition == -1.2 and TPSType == "ATR" and tra
         msgTP3 := msgTP3 + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
         msgTP3 := msgTP3 + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
         
-        alert(msgTP3, alert.freq_once_per_bar_close)
+        // JSON format for Webhook (Short TP3) - send JSON directly
+        jsonTP3Short = '{"signal":"TP3_HIT","symbol":"' + syminfo.ticker + '","entry_price":' + str.tostring(entryLine, "#.##") + ',"exit_price":' + str.tostring(tp3Line, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
+        
+        alert(jsonTP3Short, alert.freq_once_per_bar_close)
 if shortX and tradeDateIsAllowed
     strategy.close('Short', comment = 'SX')
     // ⚪ Position Closed (Short)
@@ -660,7 +695,10 @@ if shortX and tradeDateIsAllowed
     msgClose := msgClose + "⏰ Time: " + str.tostring(time, "yyyy-MM-dd HH:mm") + "\n"
     msgClose := msgClose + "📈 Timeframe: " + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period)
     
-    alert(msgClose, alert.freq_once_per_bar_close)
+    // JSON format for Webhook (Short Close) - send JSON directly
+    jsonCloseShort = '{"signal":"CLOSE","symbol":"' + syminfo.ticker + '","price":' + str.tostring(close, "#.##") + ',"time":"' + str.tostring(time, "yyyy-MM-dd HH:mm") + '","timeframe":"' + str.tostring(timeframe.multiplier) + str.tostring(timeframe.period) + '"}'
+    
+    alert(jsonCloseShort, alert.freq_once_per_bar_close)
 
 
 // ——————————— <visuals>
