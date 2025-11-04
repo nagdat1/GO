@@ -64,9 +64,14 @@ def health_check():
 
 
 @app.route('/webhook', methods=['POST'])
-def webhook():
+@app.route('/personal/<chat_id>/webhook', methods=['POST'])
+def webhook(chat_id=None):
     """
     Main webhook endpoint to receive signals from TradingView
+    
+    Supports two formats:
+    - /webhook (default, uses TELEGRAM_CHAT_ID from config)
+    - /personal/<chat_id>/webhook (uses chat_id from URL)
     
     Expected JSON format:
     {
@@ -125,9 +130,9 @@ def webhook():
             logger.warning(f"Unknown signal type: {signal}")
             return jsonify({"error": f"Unknown signal type: {signal}"}), 400
         
-        # Send message to Telegram
+        # Send message to Telegram (use chat_id from URL if provided)
         if message:
-            success = send_message(message)
+            success = send_message(message, chat_id=chat_id)
             if success:
                 logger.info(f"Successfully sent {signal} signal to Telegram")
                 return jsonify({

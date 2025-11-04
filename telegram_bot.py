@@ -11,19 +11,27 @@ logger = logging.getLogger(__name__)
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
 
 
-def send_message(message: str) -> bool:
+def send_message(message: str, chat_id: str = None) -> bool:
     """
     Send message to Telegram chat
     
     Args:
         message: Message text to send
+        chat_id: Optional chat ID (if not provided, uses TELEGRAM_CHAT_ID from config)
         
     Returns:
         bool: True if message sent successfully, False otherwise
     """
     try:
+        # Use provided chat_id or fall back to config
+        target_chat_id = chat_id or TELEGRAM_CHAT_ID
+        
+        if not target_chat_id:
+            logger.error("No chat ID provided and TELEGRAM_CHAT_ID not set")
+            return False
+        
         payload = {
-            "chat_id": TELEGRAM_CHAT_ID,
+            "chat_id": target_chat_id,
             "text": message,
             "parse_mode": "Markdown"
         }
@@ -31,7 +39,7 @@ def send_message(message: str) -> bool:
         response = requests.post(TELEGRAM_API_URL, json=payload, timeout=10)
         response.raise_for_status()
         
-        logger.info(f"Message sent successfully to Telegram")
+        logger.info(f"Message sent successfully to Telegram (chat_id: {target_chat_id})")
         return True
         
     except requests.exceptions.RequestException as e:
