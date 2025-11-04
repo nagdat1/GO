@@ -17,6 +17,7 @@ from config import WEBHOOK_PORT, DEBUG, get_config_status
 import logging
 import re
 from datetime import datetime
+import hashlib
 
 # Configure logging
 logging.basicConfig(
@@ -27,6 +28,50 @@ logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
+
+# Simple cache to prevent duplicate messages (last 5 minutes)
+recent_messages = {}
+
+def get_message_key(data: dict) -> str:
+    """Generate a unique key for a message to detect duplicates"""
+    signal = data.get('signal', '').upper()
+    symbol = data.get('symbol', '')
+    time_str = data.get('time', '')
+    
+    # Round time to nearest minute to group similar messages
+    if time_str:
+        try:
+            dt = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
+            time_minute = dt.strftime("%Y-%m-%d %H:%M")
+        except:
+            time_minute = datetime.now().strftime("%Y-%m-%d %H:%M")
+    else:
+        time_minute = datetime.now().strftime("%Y-%m-%d %H:%M")
+    
+    # Create key: signal_symbol_time_minute
+    key = f"{signal}_{symbol}_{time_minute}"
+    return key
+
+def is_recent_duplicate(key: str) -> bool:
+    """Check if same signal was sent recently (within 5 minutes)"""
+    current_time = datetime.now()
+    
+    # Clean old entries (older than 5 minutes)
+    expired_keys = []
+    for k, v in recent_messages.items():
+        if (current_time - v).total_seconds() > 300:  # 5 minutes
+            expired_keys.append(k)
+    for k in expired_keys:
+        del recent_messages[k]
+    
+    # Check if this key exists
+    if key in recent_messages:
+        logger.info(f"Duplicate detected: {key} (sent {(current_time - recent_messages[key]).total_seconds():.0f}s ago)")
+        return True
+    
+    # Store this key
+    recent_messages[key] = current_time
+    return False
 
 def parse_tradingview_text_alert(text: str) -> dict:
     """
@@ -223,6 +268,18 @@ def webhook(chat_id=None):
             }), 400
         
         logger.info(f"Received data: {data}")
+        
+        # Check for duplicate messages (same signal, symbol, within same minute)
+        message_key = get_message_key(data)
+        if is_recent_duplicate(message_key):
+            logger.warning(f"⚠️ Duplicate message ignored: {message_key}")
+            return jsonify({
+                "status": "ignored",
+                "message": "Duplicate message - same signal already sent recently",
+                "key": message_key
+            }), 200
+        
+        logger.info(f"✅ New message: {message_key}")
         
         # Get signal type
         signal = data.get('signal', '')
