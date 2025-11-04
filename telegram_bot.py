@@ -219,3 +219,28 @@ def format_position_closed(data: dict) -> str:
     
     return message
 
+
+def send_startup_message() -> bool:
+    """
+    Send welcome/startup message when the application starts
+    
+    Returns:
+        bool: True if message sent successfully, False otherwise
+    """
+    try:
+        from datetime import datetime
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        message = f"🤖 *Bot Started Successfully!*\n\n"
+        message += f"✅ TradingView Webhook to Telegram Bot\n"
+        message += f"🕐 Started at: {current_time}\n\n"
+        message += f"📊 Ready to receive trading signals!\n"
+        message += f"🔗 Webhook endpoint: `/webhook`\n\n"
+        message += f"✨ Waiting for signals..."
+        
+        return send_message(message)
+        
+    except Exception as e:
+        logger.error(f"Error sending startup message: {e}")
+        return False
+

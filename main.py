@@ -28,9 +28,21 @@ app = Flask(__name__)
 
 # Check configuration status (without raising error)
 from config import get_config_status
+from telegram_bot import send_startup_message
+import time
+
 config_status = get_config_status()
 if config_status["all_set"]:
     logger.info("Configuration validated successfully")
+    # Send startup message after a short delay to ensure app is fully started
+    def send_startup_delayed():
+        time.sleep(2)  # Wait 2 seconds for app to fully start
+        send_startup_message()
+    
+    # Send startup message in background
+    import threading
+    startup_thread = threading.Thread(target=send_startup_delayed, daemon=True)
+    startup_thread.start()
 else:
     logger.warning("⚠️ Configuration incomplete. Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID environment variables.")
     logger.warning(f"Telegram Bot Token: {'✓ Set' if config_status['telegram_bot_token'] else '✗ Missing'}")
