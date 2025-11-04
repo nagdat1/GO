@@ -7,8 +7,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Telegram Bot Configuration
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
-TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')
+# ⚠️ WARNING: Never commit your tokens to git!
+# Use environment variables in Railway or .env file for local development
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8361920962:AAFkWchaQStjaD09ayMI8VYm1vadr4p6zEY')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '8169000394')
 
 # Webhook Configuration
 WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', '')  # Optional: for security
