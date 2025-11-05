@@ -37,7 +37,14 @@ recent_messages = {}
 
 def get_message_key(data: dict) -> str:
     """Generate a unique key for a message to detect duplicates"""
-    signal = data.get('signal', '').upper()
+    signal = data.get('signal', '')
+    # Handle both string and int signal types
+    if isinstance(signal, int):
+        signal = str(signal)
+    elif isinstance(signal, str):
+        signal = signal.upper()
+    else:
+        signal = str(signal) if signal else ''
     symbol = data.get('symbol', '')
     time_str = data.get('time', '')
     
