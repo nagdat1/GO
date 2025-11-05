@@ -1,0 +1,241 @@
+═══════════════════════════════════════════════════════════════════════════
+📋 جميع التنبيهات المطلوبة للمؤشر - TradingView Alerts
+═══════════════════════════════════════════════════════════════════════════
+
+⚙️ إعدادات عامة لكل التنبيهات:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Alert Type: Webhook URL
+✅ Webhook URL: https://go-production-e51a.up.railway.app/personal/8169000394/webhook
+✅ Frequency: Once Per Bar Close (مهم جداً لتجنب التكرار!)
+✅ Expiration: Never (أو حسب رغبتك)
+✅ JSON يجب أن يكون في سطر واحد (minified)
+
+═══════════════════════════════════════════════════════════════════════════
+1️⃣ تنبيه BUY (إشارة الشراء العادية)
+═══════════════════════════════════════════════════════════════════════════
+
+Alert Name: BUY Signal - Webhook
+
+Condition: longE
+أو من القائمة: 🟢 LONG Signal
+
+Message (JSON):
+{"signal":"BUY","symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP Line 1")}},"tp2":{{plot("TP Line 2")}},"tp3":{{plot("TP Line 3")}},"stop_loss":{{plot("SL Line")}},"time":"{{time}}","timeframe":"{{interval}}"}
+
+═══════════════════════════════════════════════════════════════════════════
+2️⃣ تنبيه SELL (إشارة البيع العادية)
+═══════════════════════════════════════════════════════════════════════════
+
+Alert Name: SELL Signal - Webhook
+
+Condition: shortE
+أو من القائمة: 🔴 SHORT Signal
+
+Message (JSON):
+{"signal":"SELL","symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP Line 1")}},"tp2":{{plot("TP Line 2")}},"tp3":{{plot("TP Line 3")}},"stop_loss":{{plot("SL Line")}},"time":"{{time}}","timeframe":"{{interval}}"}
+
+═══════════════════════════════════════════════════════════════════════════
+3️⃣ تنبيه BUY_REVERSE (إشارة الشراء العكسية)
+═══════════════════════════════════════════════════════════════════════════
+
+Alert Name: BUY REVERSE Signal - Webhook
+
+Condition: longE_Reverse
+أو من القائمة: 🟠 LONG REVERSE Signal
+
+⚠️ ملاحظة: هذا التنبيه يظهر فقط عندما يكون TPSType == "Trailing" 
+ويتم عكس الصفقة من Short إلى Long (إغلاق Short + فتح Long في نفس الوقت)
+
+Message (JSON):
+{"signal":"BUY_REVERSE","symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP Line 1")}},"tp2":{{plot("TP Line 2")}},"tp3":{{plot("TP Line 3")}},"stop_loss":{{plot("SL Line")}},"time":"{{time}}","timeframe":"{{interval}}"}
+
+═══════════════════════════════════════════════════════════════════════════
+4️⃣ تنبيه SELL_REVERSE (إشارة البيع العكسية)
+═══════════════════════════════════════════════════════════════════════════
+
+Alert Name: SELL REVERSE Signal - Webhook
+
+Condition: shortE_Reverse
+أو من القائمة: 🟠 SHORT REVERSE Signal
+
+⚠️ ملاحظة: هذا التنبيه يظهر فقط عندما يكون TPSType == "Trailing" 
+ويتم عكس الصفقة من Long إلى Short (إغلاق Long + فتح Short في نفس الوقت)
+
+Message (JSON):
+{"signal":"SELL_REVERSE","symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP Line 1")}},"tp2":{{plot("TP Line 2")}},"tp3":{{plot("TP Line 3")}},"stop_loss":{{plot("SL Line")}},"time":"{{time}}","timeframe":"{{interval}}"}
+
+═══════════════════════════════════════════════════════════════════════════
+5️⃣ تنبيه TP1_HIT (تحقيق الهدف الأول)
+═══════════════════════════════════════════════════════════════════════════
+
+Alert Name: TP1 Hit - Webhook
+
+Condition: longTP1 or shortTP1
+أو من القائمة: 🎯 TP1 Hit
+
+Message (JSON):
+{"signal":"TP1_HIT","symbol":"{{ticker}}","entry_price":{{plot("Entry Line")}},"exit_price":{{close}},"tp1":{{plot("TP Line 1")}},"time":"{{time}}","timeframe":"{{interval}}"}
+
+═══════════════════════════════════════════════════════════════════════════
+6️⃣ تنبيه TP2_HIT (تحقيق الهدف الثاني)
+═══════════════════════════════════════════════════════════════════════════
+
+Alert Name: TP2 Hit - Webhook
+
+Condition: longTP2 or shortTP2
+أو من القائمة: 🎯 TP2 Hit
+
+Message (JSON):
+{"signal":"TP2_HIT","symbol":"{{ticker}}","entry_price":{{plot("Entry Line")}},"exit_price":{{close}},"tp2":{{plot("TP Line 2")}},"time":"{{time}}","timeframe":"{{interval}}"}
+
+═══════════════════════════════════════════════════════════════════════════
+7️⃣ تنبيه TP3_HIT (تحقيق الهدف الثالث)
+═══════════════════════════════════════════════════════════════════════════
+
+Alert Name: TP3 Hit - Webhook
+
+Condition: longTP3 or shortTP3
+أو من القائمة: 🎯 TP3 Hit
+
+Message (JSON):
+{"signal":"TP3_HIT","symbol":"{{ticker}}","entry_price":{{plot("Entry Line")}},"exit_price":{{close}},"tp3":{{plot("TP Line 3")}},"time":"{{time}}","timeframe":"{{interval}}"}
+
+═══════════════════════════════════════════════════════════════════════════
+8️⃣ تنبيه STOP_LOSS (وقف الخسارة)
+═══════════════════════════════════════════════════════════════════════════
+
+Alert Name: Stop Loss - Webhook
+
+Condition: longSL or shortSL
+أو من القائمة: 🛑 Stop Loss
+
+Message (JSON):
+{"signal":"STOP_LOSS","symbol":"{{ticker}}","price":{{close}},"time":"{{time}}","timeframe":"{{interval}}"}
+
+═══════════════════════════════════════════════════════════════════════════
+📝 ملاحظات مهمة جداً:
+═══════════════════════════════════════════════════════════════════════════
+
+1. ✅ JSON يجب أن يكون في سطر واحد (minified)
+   - لا تضع فواصل أسطر داخل JSON
+   - لا تضع مسافات إضافية قبل/بعد JSON
+
+2. ✅ أسماء Plots يجب أن تطابق تماماً:
+   - "TP Line 1" ✅
+   - "TP Line 2" ✅
+   - "TP Line 3" ✅
+   - "Entry Line" ✅
+   - "SL Line" ✅
+
+3. ✅ استخدم المتغيرات الصحيحة:
+   - {{ticker}} → رمز العملة (مثل BTCUSDT)
+   - {{close}} → السعر الحالي (السعر الحقيقي، ليس Position Size)
+   - {{time}} → الوقت الحالي
+   - {{interval}} → الإطار الزمني (مثل 15m, 1h)
+
+4. ✅ الإشارات العكسية (REVERSE):
+   - تظهر فقط عندما يكون TPSType == "Trailing" في المؤشر
+   - تحدث عندما يتم إغلاق صفقة وفتح عكسية في نفس الوقت
+   - BUY_REVERSE: إغلاق Short + فتح Long
+   - SELL_REVERSE: إغلاق Long + فتح Short
+
+5. ✅ Frequency: "Once Per Bar Close"
+   - هذا مهم جداً لتجنب إرسال تنبيهات متكررة
+   - لا تستخدم "Once Per Bar" أو "Every Bar"
+
+═══════════════════════════════════════════════════════════════════════════
+✅ Checklist قبل الإعداد:
+═══════════════════════════════════════════════════════════════════════════
+
+- [ ] تم إعداد جميع التنبيهات الـ 8
+- [ ] Webhook URL صحيح في كل تنبيه
+- [ ] JSON format صحيح في Message field لكل تنبيه
+- [ ] Frequency: "Once Per Bar Close" في كل تنبيه
+- [ ] تم اختيار الشرط الصحيح (Condition) لكل تنبيه
+- [ ] Alert Type: "Webhook URL" في كل تنبيه
+
+═══════════════════════════════════════════════════════════════════════════
+🎯 بعد الإعداد:
+═══════════════════════════════════════════════════════════════════════════
+
+بعد إعداد جميع التنبيهات، ستصل الرسائل إلى Telegram مع:
+
+✅ السعر الحقيقي (ليس Position Size)
+✅ TP1, TP2, TP3 (للإشارات BUY/SELL و REVERSE)
+✅ Stop Loss (للإشارات BUY/SELL و REVERSE)
+✅ Timeframe (الإطار الزمني)
+✅ Time (الوقت)
+✅ إشارات العكس (REVERSE) عندما يحدث العكس في Trailing Mode
+
+═══════════════════════════════════════════════════════════════════════════
+📋 ملخص سريع للتنبيهات:
+═══════════════════════════════════════════════════════════════════════════
+
+1. BUY          → longE
+2. SELL         → shortE
+3. BUY_REVERSE  → longE_Reverse
+4. SELL_REVERSE → shortE_Reverse
+5. TP1_HIT      → longTP1 or shortTP1
+6. TP2_HIT      → longTP2 or shortTP2
+7. TP3_HIT      → longTP3 or shortTP3
+8. STOP_LOSS    → longSL or shortSL
+
+═══════════════════════════════════════════════════════════════════════════
+🔔 التنبيهات المركزية (Central Alerts) - تنبيه منفصل لكل إشارة
+═══════════════════════════════════════════════════════════════════════════
+
+✅ الحل الجديد: تم إنشاء 8 تنبيهات مركزية منفصلة في المؤشر!
+كل تنبيه يرسل نوع الإشارة الخاص به تلقائياً في الرسالة.
+
+📋 التنبيهات المركزية المتاحة:
+
+1️⃣ Central - BUY
+   Condition: 🔔 Central - BUY
+   Message (JSON): {"signal":"BUY","symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP Line 1")}},"tp2":{{plot("TP Line 2")}},"tp3":{{plot("TP Line 3")}},"stop_loss":{{plot("SL Line")}},"time":"{{time}}","timeframe":"{{interval}}"}
+
+2️⃣ Central - SELL
+   Condition: 🔔 Central - SELL
+   Message (JSON): {"signal":"SELL","symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP Line 1")}},"tp2":{{plot("TP Line 2")}},"tp3":{{plot("TP Line 3")}},"stop_loss":{{plot("SL Line")}},"time":"{{time}}","timeframe":"{{interval}}"}
+
+3️⃣ Central - BUY REVERSE
+   Condition: 🔔 Central - BUY REVERSE
+   Message (JSON): {"signal":"BUY_REVERSE","symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP Line 1")}},"tp2":{{plot("TP Line 2")}},"tp3":{{plot("TP Line 3")}},"stop_loss":{{plot("SL Line")}},"time":"{{time}}","timeframe":"{{interval}}"}
+
+4️⃣ Central - SELL REVERSE
+   Condition: 🔔 Central - SELL REVERSE
+   Message (JSON): {"signal":"SELL_REVERSE","symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP Line 1")}},"tp2":{{plot("TP Line 2")}},"tp3":{{plot("TP Line 3")}},"stop_loss":{{plot("SL Line")}},"time":"{{time}}","timeframe":"{{interval}}"}
+
+5️⃣ Central - TP1
+   Condition: 🔔 Central - TP1
+   Message (JSON): {"signal":"TP1_HIT","symbol":"{{ticker}}","entry_price":{{plot("Entry Line")}},"exit_price":{{close}},"tp1":{{plot("TP Line 1")}},"time":"{{time}}","timeframe":"{{interval}}"}
+
+6️⃣ Central - TP2
+   Condition: 🔔 Central - TP2
+   Message (JSON): {"signal":"TP2_HIT","symbol":"{{ticker}}","entry_price":{{plot("Entry Line")}},"exit_price":{{close}},"tp2":{{plot("TP Line 2")}},"time":"{{time}}","timeframe":"{{interval}}"}
+
+7️⃣ Central - TP3
+   Condition: 🔔 Central - TP3
+   Message (JSON): {"signal":"TP3_HIT","symbol":"{{ticker}}","entry_price":{{plot("Entry Line")}},"exit_price":{{close}},"tp3":{{plot("TP Line 3")}},"time":"{{time}}","timeframe":"{{interval}}"}
+
+8️⃣ Central - STOP LOSS
+   Condition: 🔔 Central - STOP LOSS
+   Message (JSON): {"signal":"STOP_LOSS","symbol":"{{ticker}}","price":{{close}},"time":"{{time}}","timeframe":"{{interval}}"}
+
+═══════════════════════════════════════════════════════════════════════════
+✅ المميزات:
+═══════════════════════════════════════════════════════════════════════════
+
+✅ كل تنبيه يرسل نوع الإشارة الخاص به تلقائياً في alertcondition message
+✅ الرسالة تحتوي على: SIGNAL:BUY|SYMBOL:...|PRICE:...|TIME:...|TF:...
+✅ المشروع يقرأ هذه المعلومات تلقائياً ويحدد نوع الإشارة
+✅ كل إشارة لها رسالتها المنفصلة
+✅ JSON format دقيق لكل إشارة (في Message field)
+
+💡 ملاحظة: التنبيهات المركزية تختلف عن التنبيهات الفردية:
+   - التنبيهات المركزية: أسماء تبدأ بـ "🔔 Central -"
+   - التنبيهات الفردية: أسماء مثل "🟢 LONG Signal"
+
+═══════════════════════════════════════════════════════════════════════════
+🎉 تهانينا! الآن لديك جميع التنبيهات المطلوبة!
+═══════════════════════════════════════════════════════════════════════════
+

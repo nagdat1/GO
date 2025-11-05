@@ -82,12 +82,72 @@ def parse_tradingview_text_alert(text: str) -> dict:
     
     Example input:
     "nagdat (Trailing, Open/Close, No Filtering, 7, 45, 10, 2, 10, 50, 30, 20, 10): تم تنفيذ الأمر buy @ 25319.53 على ACEUSDT. المركز الجديدة للإستراتيجية هو 0"
+    "SIGNAL:BUY|SYMBOL:BTCUSDT|PRICE:50000|TIME:2024-01-15 14:30|TF:15m"
     
     Returns:
         dict: Parsed data or None if cannot parse
     """
     try:
         logger.info(f"Parsing text alert: {text[:200]}")
+        
+        # ═══════════════════════════════════════════════════════════════════════
+        # 🔍 Parse Smart Central Alert format: "SIGNAL_CODE:1|SYMBOL:BTCUSDT|PRICE:50000|..."
+        # 🔍 Parse Central Alert format: "SIGNAL:BUY|SYMBOL:BTCUSDT|PRICE:50000|..."
+        # ═══════════════════════════════════════════════════════════════════════
+        
+        # Signal Type Code mapping (from Pine Script indicator)
+        # 1 = BUY, 2 = SELL, 3 = BUY_REVERSE, 4 = SELL_REVERSE, 5 = TP1, 6 = TP2, 7 = TP3, 8 = STOP_LOSS
+        signal_code_map = {
+            '1': 'BUY',
+            '2': 'SELL',
+            '3': 'BUY_REVERSE',
+            '4': 'SELL_REVERSE',
+            '5': 'TP1_HIT',
+            '6': 'TP2_HIT',
+            '7': 'TP3_HIT',
+            '8': 'STOP_LOSS'
+        }
+        
+        if ('SIGNAL_CODE:' in text or 'SIGNAL:' in text) and '|' in text:
+            logger.info("🔍 Detected Smart Central Alert format (SIGNAL_CODE:...|...|...) or Central Alert format (SIGNAL:...|...|...)")
+            result = {}
+            
+            # Parse pipe-separated values
+            parts = text.split('|')
+            for part in parts:
+                if ':' in part:
+                    key, value = part.split(':', 1)
+                    key = key.strip().upper()
+                    value = value.strip()
+                    
+                    if key == 'SIGNAL_CODE':
+                        # Convert signal code to signal name
+                        signal_name = signal_code_map.get(value, 'UNKNOWN')
+                        result['signal'] = signal_name
+                        logger.info(f"📊 Converted Signal Code {value} → {signal_name}")
+                    elif key == 'SIGNAL':
+                        # Direct signal name (for backward compatibility)
+                        result['signal'] = value.upper()
+                    elif key == 'SYMBOL':
+                        result['symbol'] = value
+                    elif key == 'PRICE':
+                        try:
+                            result['price'] = float(value)
+                            result['entry_price'] = float(value)  # Also set as entry_price
+                        except:
+                            pass
+                    elif key == 'TIME':
+                        result['time'] = value
+                    elif key == 'TF':
+                        result['timeframe'] = value
+            
+            if 'signal' in result:
+                logger.info(f"✅ Parsed Smart Central Alert: signal={result.get('signal')}, symbol={result.get('symbol')}")
+                return result
+        
+        # ═══════════════════════════════════════════════════════════════════════
+        # 🔍 Parse traditional text format
+        # ═══════════════════════════════════════════════════════════════════════
         
         # Extract signal type (buy/sell)
         signal_match = re.search(r'تم تنفيذ الأمر\s+(buy|sell|BUY|SELL)', text, re.IGNORECASE)
@@ -500,6 +560,7 @@ def webhook(chat_id=None):
                 logger.warning(f"Failed to get form data: {e}")
         
         # If we still don't have data, try to parse as TradingView text message
+        # Also, if we have JSON but missing TP/SL, try to merge with text alert data
         if not data:
             try:
                 raw_data = request.get_data(as_text=True)
@@ -513,6 +574,28 @@ def webhook(chat_id=None):
                         logger.warning(f"Could not parse text message: {raw_data[:100]}")
             except Exception as e:
                 logger.warning(f"Error parsing text alert: {e}")
+        else:
+            # If we have JSON data but missing TP/SL, try to extract from text alert too
+            # This helps with Central Alert where alertcondition message might have price info
+            if isinstance(data, dict) and data.get('signal') and not data.get('tp1'):
+                try:
+                    raw_data = request.get_data(as_text=True)
+                    if raw_data and ('SIGNAL:' in raw_data or 'PRICE:' in raw_data):
+                        # Try to extract price from Central Alert format if JSON doesn't have it
+                        if 'PRICE:' in raw_data and not data.get('entry_price') and not data.get('price'):
+                            price_match = re.search(r'PRICE:([0-9]+(?:\.[0-9]+)?)', raw_data)
+                            if price_match:
+                                try:
+                                    price = float(price_match.group(1))
+                                    if not data.get('entry_price'):
+                                        data['entry_price'] = price
+                                    if not data.get('price'):
+                                        data['price'] = price
+                                    logger.info(f"✅ Extracted price from Central Alert format: {price}")
+                                except:
+                                    pass
+                except:
+                    pass
         
         if not data:
             logger.warning("Received empty request - no JSON, form, or raw data")
