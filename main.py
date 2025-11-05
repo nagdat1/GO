@@ -638,7 +638,34 @@ def webhook(chat_id=None):
         
         # Get signal type
         signal = data.get('signal', '')
-        if isinstance(signal, str):
+        
+        # Signal Type Code mapping (from Pine Script indicator)
+        # 1 = BUY, 2 = SELL, 3 = BUY_REVERSE, 4 = SELL_REVERSE, 5 = TP1, 6 = TP2, 7 = TP3, 8 = STOP_LOSS
+        signal_code_map = {
+            1: 'BUY',
+            2: 'SELL',
+            3: 'BUY_REVERSE',
+            4: 'SELL_REVERSE',
+            5: 'TP1_HIT',
+            6: 'TP2_HIT',
+            7: 'TP3_HIT',
+            8: 'STOP_LOSS',
+            '1': 'BUY',
+            '2': 'SELL',
+            '3': 'BUY_REVERSE',
+            '4': 'SELL_REVERSE',
+            '5': 'TP1_HIT',
+            '6': 'TP2_HIT',
+            '7': 'TP3_HIT',
+            '8': 'STOP_LOSS'
+        }
+        
+        # Convert signal code (number) to signal name if needed
+        if signal in signal_code_map:
+            original_signal = signal
+            signal = signal_code_map[signal]
+            logger.info(f"📊 Converted Signal Code {original_signal} → {signal}")
+        elif isinstance(signal, str):
             signal = signal.upper()
         
         logger.info(f"Signal type: {signal}")
