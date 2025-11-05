@@ -18,6 +18,7 @@ from telegram_bot import (
 from config import WEBHOOK_PORT, DEBUG, get_config_status
 import logging
 import re
+import json
 from datetime import datetime
 import hashlib
 import threading
@@ -203,8 +204,44 @@ def parse_tradingview_text_alert(text: str) -> dict:
             logger.info("🔍 Detected Smart Central Alert format (SIGNAL_CODE:...|...|...) or Central Alert format (SIGNAL:...|...|...)")
             result = {}
             
+            # ═══════════════════════════════════════════════════════════════════════
+            # 🔍 أولاً: حاول استخراج JSON من النص (إذا كان موجوداً)
+            # ═══════════════════════════════════════════════════════════════════════
+            # البحث عن JSON في النص (يبدأ بـ { وينتهي بـ })
+            json_start = text.find('{')
+            if json_start != -1:
+                brace_count = 0
+                json_end = -1
+                for i in range(json_start, len(text)):
+                    if text[i] == '{':
+                        brace_count += 1
+                    elif text[i] == '}':
+                        brace_count -= 1
+                        if brace_count == 0:
+                            json_end = i + 1
+                            break
+                
+                if json_end > json_start:
+                    json_str = text[json_start:json_end]
+                    # استبدال {{plot_22}} بـ null في JSON
+                    json_str_cleaned = re.sub(r'\{\{plot[^}]+\}\}', 'null', json_str)
+                    try:
+                        json_data = json.loads(json_str_cleaned)
+                        if isinstance(json_data, dict):
+                            # استخراج البيانات من JSON
+                            result.update(json_data)
+                            logger.info(f"✅ Extracted data from JSON in text: {list(json_data.keys())}")
+                    except:
+                        pass
+            
+            # ═══════════════════════════════════════════════════════════════════════
+            # 🔍 ثانياً: استخرج البيانات من alertcondition message (SIGNAL_CODE:...|...)
+            # ═══════════════════════════════════════════════════════════════════════
             # Parse pipe-separated values
-            parts = text.split('|')
+            # نبحث عن الجزء قبل JSON (alertcondition message)
+            text_before_json = text[:json_start] if json_start != -1 else text
+            
+            parts = text_before_json.split('|')
             for part in parts:
                 if ':' in part:
                     key, value = part.split(':', 1)
@@ -228,8 +265,8 @@ def parse_tradingview_text_alert(text: str) -> dict:
                                     value = signal_code_direct.group(1)
                                     logger.info(f"✅ Found SIGNAL_CODE with actual number: {value}")
                                 else:
-                                    logger.warning(f"⚠️ Cannot extract signal code - will try to detect from context")
-                                    value = None  # Will be detected from context later
+                                    logger.warning(f"⚠️ Cannot extract signal code - will try to detect from context or memory")
+                                    value = None  # Will be detected from context or memory later
                         
                         if value and value not in ['{{plot_22}}', '{{plot("Signal Type Code")}}']:
                             # Convert signal code to signal name
@@ -243,8 +280,10 @@ def parse_tradingview_text_alert(text: str) -> dict:
                         result['symbol'] = value
                     elif key == 'PRICE':
                         try:
-                            result['price'] = float(value)
-                            result['entry_price'] = float(value)  # Also set as entry_price
+                            price_val = float(value)
+                            result['price'] = price_val
+                            if 'entry_price' not in result:
+                                result['entry_price'] = price_val
                         except:
                             pass
                     elif key == 'TIME':
@@ -252,8 +291,14 @@ def parse_tradingview_text_alert(text: str) -> dict:
                     elif key == 'TF':
                         result['timeframe'] = value
             
-            if 'signal' in result:
-                logger.info(f"✅ Parsed Smart Central Alert: signal={result.get('signal')}, symbol={result.get('symbol')}")
+            # إذا كان signal = null أو 0، احذفه (سيتم تحديده من السياق أو الذاكرة)
+            if result.get('signal') in [None, 'null', 0, '0']:
+                logger.info("⚠️ Signal is null/0 - will be detected from context or memory")
+                result.pop('signal', None)
+            
+            # إذا كانت هناك بيانات (symbol أو price)، نعيد النتيجة
+            if result and (result.get('symbol') or result.get('price') or result.get('entry_price')):
+                logger.info(f"✅ Parsed Smart Central Alert: symbol={result.get('symbol')}, price={result.get('price') or result.get('entry_price')}, signal={result.get('signal', 'will be detected')}")
                 return result
         
         # ═══════════════════════════════════════════════════════════════════════
@@ -563,7 +608,6 @@ def webhook(chat_id=None):
             else:
                 logger.info("Raw Data: Empty")
             if raw_data:
-                import json
                 # Strip whitespace before/after JSON (TradingView might add extra spaces)
                 raw_data_cleaned = raw_data.strip()
                 
@@ -632,6 +676,31 @@ def webhook(chat_id=None):
                 
                 if json_match:
                     json_str = json_match.group(0)
+                    
+                    # ═══════════════════════════════════════════════════════════════════════
+                    # 🔧 إصلاح: استخراج JSON كامل من النص (ليس فقط جزء)
+                    # ═══════════════════════════════════════════════════════════════════════
+                    # المشكلة: regex قد يجد فقط جزء صغير (مثل {{plot_22}})
+                    # الحل: البحث عن JSON كامل من أول { إلى آخر }
+                    if json_str.startswith('{{') or len(json_str) < 20:
+                        # إذا كان النتيجة صغيرة جداً أو تبدأ بـ {{، نحتاج للبحث عن JSON كامل
+                        # ابحث عن أول { في النص
+                        json_start = raw_data_cleaned.find('{')
+                        if json_start != -1:
+                            # ابحث عن آخر } المتطابق
+                            brace_count = 0
+                            json_end = -1
+                            for i in range(json_start, len(raw_data_cleaned)):
+                                if raw_data_cleaned[i] == '{':
+                                    brace_count += 1
+                                elif raw_data_cleaned[i] == '}':
+                                    brace_count -= 1
+                                    if brace_count == 0:
+                                        json_end = i + 1
+                                        break
+                            if json_end > json_start:
+                                json_str = raw_data_cleaned[json_start:json_end]
+                                logger.info(f"✅ Extracted complete JSON from text (length: {len(json_str)} chars)")
                     
                     # Clean JSON: Remove any text before the first {
                     # This handles cases where regex matched text before JSON
@@ -702,30 +771,41 @@ def webhook(chat_id=None):
                             json_str = re.sub(r'"signal"\s*:\s*\{\{[^}]+\}\}', f'"signal":{signal_code_from_alert}', json_str)
                             logger.info(f"✅ Fixed signal field using SIGNAL_CODE from alertcondition message: {signal_code_from_alert}")
                         else:
-                            # إذا لم يوجد SIGNAL_CODE، استبدل بـ 0 (unknown)
-                            # ثم سيتم تحديد نوع الإشارة من السياق (TP/SL values)
-                            json_str = re.sub(r'\{\{plot[^}]+\}\}', '0', json_str)
-                            logger.warning("⚠️ Replaced plot placeholder with 0 (SIGNAL_CODE not found in message - will detect from context)")
+                            # إذا لم يوجد SIGNAL_CODE، استبدل بـ "0" (string) بدلاً من 0 (number)
+                            # لأن JSON يحتاج quotes للقيم النصية، لكن signal قد يكون number أو string
+                            # الحل: استبدل بـ null أولاً، ثم سيتم التعامل معه في الكود
+                            json_str = re.sub(r'"signal"\s*:\s*\{\{[^}]+\}\}', '"signal":null', json_str)
+                            # أيضاً استبدل أي {{plot...}} أخرى بـ null
+                            json_str = re.sub(r'\{\{plot[^}]+\}\}', 'null', json_str)
+                            logger.warning("⚠️ Replaced plot placeholder with null (SIGNAL_CODE not found - will detect from context or memory)")
                     
-                    # أيضاً: إذا كان signal = 0 في JSON الموجود، حاول استبداله بـ SIGNAL_CODE
-                    if signal_code_from_alert and '"signal":0' in json_str:
-                        json_str = re.sub(r'"signal"\s*:\s*0', f'"signal":{signal_code_from_alert}', json_str)
-                        logger.info(f"✅ Fixed signal=0 using SIGNAL_CODE from alertcondition message: {signal_code_from_alert}")
+                    # أيضاً: إذا كان signal = null أو 0 في JSON الموجود، حاول استبداله بـ SIGNAL_CODE
+                    if signal_code_from_alert:
+                        json_str = re.sub(r'"signal"\s*:\s*(null|0)', f'"signal":{signal_code_from_alert}', json_str)
+                        logger.info(f"✅ Fixed signal=null/0 using SIGNAL_CODE from alertcondition message: {signal_code_from_alert}")
                     
                     try:
                         data = json.loads(json_str)
-                        logger.info("✅ Successfully parsed JSON extracted from text")
-                        logger.info(f"Parsed JSON keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
-                        logger.info(f"Signal: {data.get('signal', 'N/A')}, Symbol: {data.get('symbol', 'N/A')}")
+                        # التحقق من أن data هو dict وليس int أو string
+                        if not isinstance(data, dict):
+                            logger.warning(f"⚠️ Parsed JSON is not a dict: {type(data)} = {data}")
+                            data = None
+                        else:
+                            logger.info("✅ Successfully parsed JSON extracted from text")
+                            logger.info(f"Parsed JSON keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
+                            logger.info(f"Signal: {data.get('signal', 'N/A')}, Symbol: {data.get('symbol', 'N/A')}")
                     except json.JSONDecodeError as e2:
                         logger.warning(f"Failed to parse extracted JSON: {e2}")
                         logger.info(f"Extracted JSON string: {json_str[:300]}")
                         # Try to parse whole string as JSON
                         try:
                             data = json.loads(raw_data_cleaned)
-                            logger.info("✅ Successfully parsed JSON from raw data (after extraction attempt)")
+                            if not isinstance(data, dict):
+                                data = None
+                            else:
+                                logger.info("✅ Successfully parsed JSON from raw data (after extraction attempt)")
                         except:
-                            pass
+                            data = None
                 else:
                     # No JSON found in text, try to parse whole string as JSON
                     logger.info("No JSON pattern found, trying to parse whole string as JSON...")
@@ -783,7 +863,7 @@ def webhook(chat_id=None):
         
         # If we still don't have data, try to parse as TradingView text message
         # Also, if we have JSON but missing TP/SL, try to merge with text alert data
-        if not data:
+        if not data or not isinstance(data, dict):
             try:
                 raw_data = request.get_data(as_text=True)
                 if raw_data:
@@ -791,7 +871,7 @@ def webhook(chat_id=None):
                     parsed_data = parse_tradingview_text_alert(raw_data)
                     if parsed_data:
                         data = parsed_data
-                        logger.info("Successfully parsed TradingView text alert")
+                        logger.info("✅ Successfully parsed TradingView text alert")
                     else:
                         logger.warning(f"Could not parse text message: {raw_data[:100]}")
             except Exception as e:
@@ -834,7 +914,6 @@ def webhook(chat_id=None):
         logger.info("=== PARSED DATA ===")
         logger.info("=" * 80)
         try:
-            import json
             formatted_data = json.dumps(data, indent=2, ensure_ascii=False)
             logger.info("Parsed Data (JSON formatted):")
             logger.info("-" * 80)
@@ -890,8 +969,13 @@ def webhook(chat_id=None):
         elif isinstance(signal, str):
             signal = signal.upper()
         
+        # Handle null signal (from JSON when {{plot_22}} was replaced with null)
+        if signal is None or signal == 'null':
+            signal = None
+            logger.info("⚠️ Signal is null - will detect from context or memory")
+        
         # If signal is still 0 or empty/unknown, try to detect from context
-        if signal == 0 or signal == '' or signal == 'UNKNOWN' or (isinstance(signal, str) and signal.upper() == 'UNKNOWN'):
+        if signal is None or signal == 0 or signal == '' or signal == 'UNKNOWN' or (isinstance(signal, str) and signal.upper() == 'UNKNOWN'):
             logger.warning("⚠️ Signal type is unknown (0 or empty) - attempting to detect from context...")
             # Try to detect signal type from data context
             # This is a fallback when plot placeholder wasn't replaced
@@ -950,7 +1034,7 @@ def webhook(chat_id=None):
         # 🧠 نظام الذاكرة: تحديد الإشارات العكسية تلقائياً
         # ═══════════════════════════════════════════════════════════════════════════
         symbol = data.get('symbol', '')
-        if symbol:
+        if symbol and signal:
             # إذا كانت الإشارة BUY أو SELL، تحقق من نظام الذاكرة لتحديد REVERSE
             if signal in ['BUY', 'SELL']:
                 # استخدام نظام الذاكرة لتحديد إذا كانت الإشارة عكسية
@@ -972,6 +1056,37 @@ def webhook(chat_id=None):
             if signal in ['TP3_HIT', 'TP3', 'STOP_LOSS', 'SL']:
                 clear_open_position(symbol)
                 logger.info(f"🗑️ Removed position from memory: {symbol} (closed: {signal})")
+        elif symbol and not signal:
+            # إذا كان هناك symbol لكن لا يوجد signal، قد يكون entry signal
+            # تحقق من TP/SL لتحديد إذا كانت entry signal
+            entry_price = data.get('entry_price') or data.get('price')
+            tp1 = data.get('tp1')
+            tp2 = data.get('tp2')
+            tp3 = data.get('tp3')
+            stop_loss = data.get('stop_loss')
+            
+            # إذا كان هناك TP/SL، فهذه إشارة entry (BUY أو SELL)
+            if entry_price and (tp1 or tp2 or tp3 or stop_loss):
+                # تحديد BUY أو SELL من TP/SL
+                tp_value = tp1 or tp2 or tp3
+                if tp_value and stop_loss and tp_value > 0 and stop_loss > 0:
+                    if tp_value > entry_price and stop_loss < entry_price:
+                        signal = 'BUY'
+                    elif tp_value < entry_price and stop_loss > entry_price:
+                        signal = 'SELL'
+                
+                # الآن استخدم نظام الذاكرة لتحديد REVERSE
+                if signal in ['BUY', 'SELL']:
+                    detected_signal = detect_reverse_signal(symbol, signal)
+                    if detected_signal != signal:
+                        logger.info(f"🔄 Signal changed due to memory system: {signal} → {detected_signal}")
+                        signal = detected_signal
+                    data['signal'] = signal
+                    
+                    # حفظ في الذاكرة
+                    base_signal = 'BUY' if signal in ['BUY', 'BUY_REVERSE'] else 'SELL'
+                    set_open_position(symbol, base_signal)
+                    logger.info(f"💾 Saved position in memory: {symbol} = {base_signal}")
         
         # ═══════════════════════════════════════════════════════════════════════════
         # Validate configuration before processing
