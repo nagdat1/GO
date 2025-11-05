@@ -10,15 +10,14 @@ logger = logging.getLogger(__name__)
 
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
 
-def escape_markdown(text: str) -> str:
-    """تهريب الأحرف الخاصة في Markdown (لا نهرب . و , لأنها جزء من الأرقام)"""
+def escape_html(text: str) -> str:
+    """تهريب الأحرف الخاصة في HTML"""
     if not isinstance(text, str):
         text = str(text)
-    # تهريب الأحرف الخاصة في Markdown (لا نهرب . و , لأنها جزء من الأرقام)
-    # الأرقام نضعها داخل backticks (`) بدلاً من تهريبها
-    special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '!']
-    for char in special_chars:
-        text = text.replace(char, '\\' + char)
+    # تهريب الأحرف الخاصة في HTML
+    text = text.replace('&', '&amp;')
+    text = text.replace('<', '&lt;')
+    text = text.replace('>', '&gt;')
     return text
 
 def format_price(price: float) -> str:
@@ -48,7 +47,7 @@ def send_message(message: str, chat_id: str = None) -> bool:
         payload = {
             "chat_id": chat_id_str,
             "text": message,
-            "parse_mode": "Markdown"
+            "parse_mode": "HTML"  # استخدام HTML بدلاً من Markdown لتجنب مشاكل التهريب
         }
         
         logger.info(f"📤 Attempting to send message to chat_id: {chat_id_str}")
@@ -90,24 +89,24 @@ def format_buy_signal(data: dict) -> str:
     time = data.get('time', 'N/A')
     timeframe = data.get('timeframe', 'N/A')
     
-    message = f"🟢 *صفقة لونج \\(LONG\\)* 🟢\n\n"
-    message += f"📊 الرمز: {escape_markdown(symbol)}\n"
-    message += f"💰 سعر الدخول: `{format_price(entry_price)}`\n"
-    message += f"⏰ الوقت: {escape_markdown(time)}\n"
-    message += f"📈 الإطار الزمني: {escape_markdown(timeframe)}\n\n"
+    message = f"🟢 <b>صفقة لونج (LONG)</b> 🟢\n\n"
+    message += f"📊 الرمز: {escape_html(symbol)}\n"
+    message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+    message += f"⏰ الوقت: {escape_html(time)}\n"
+    message += f"📈 الإطار الزمني: {escape_html(timeframe)}\n\n"
     
     # عرض TP/SL المتاحة
     if tp1 or tp2 or tp3 or stop_loss:
-        message += f"🎯 *أهداف الربح:*\n"
+        message += f"🎯 <b>أهداف الربح:</b>\n"
         if tp1:
-            message += f"🎯 TP1: `{format_price(float(tp1))}`\n"
+            message += f"🎯 TP1: <code>{format_price(float(tp1))}</code>\n"
         if tp2:
-            message += f"🎯 TP2: `{format_price(float(tp2))}`\n"
+            message += f"🎯 TP2: <code>{format_price(float(tp2))}</code>\n"
         if tp3:
-            message += f"🎯 TP3: `{format_price(float(tp3))}`\n"
+            message += f"🎯 TP3: <code>{format_price(float(tp3))}</code>\n"
         message += "\n"
         if stop_loss:
-            message += f"🛑 وقف الخسارة: `{format_price(float(stop_loss))}`"
+            message += f"🛑 وقف الخسارة: <code>{format_price(float(stop_loss))}</code>"
     
     return message
 
@@ -122,24 +121,24 @@ def format_sell_signal(data: dict) -> str:
     time = data.get('time', 'N/A')
     timeframe = data.get('timeframe', 'N/A')
     
-    message = f"🔴 *صفقة شورت \\(SHORT\\)* 🔴\n\n"
-    message += f"📊 الرمز: {escape_markdown(symbol)}\n"
-    message += f"💰 سعر الدخول: `{format_price(entry_price)}`\n"
-    message += f"⏰ الوقت: {escape_markdown(time)}\n"
-    message += f"📈 الإطار الزمني: {escape_markdown(timeframe)}\n\n"
+    message = f"🔴 <b>صفقة شورت (SHORT)</b> 🔴\n\n"
+    message += f"📊 الرمز: {escape_html(symbol)}\n"
+    message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+    message += f"⏰ الوقت: {escape_html(time)}\n"
+    message += f"📈 الإطار الزمني: {escape_html(timeframe)}\n\n"
     
     # عرض TP/SL المتاحة
     if tp1 or tp2 or tp3 or stop_loss:
-        message += f"🎯 *أهداف الربح:*\n"
+        message += f"🎯 <b>أهداف الربح:</b>\n"
         if tp1:
-            message += f"🎯 TP1: `{format_price(float(tp1))}`\n"
+            message += f"🎯 TP1: <code>{format_price(float(tp1))}</code>\n"
         if tp2:
-            message += f"🎯 TP2: `{format_price(float(tp2))}`\n"
+            message += f"🎯 TP2: <code>{format_price(float(tp2))}</code>\n"
         if tp3:
-            message += f"🎯 TP3: `{format_price(float(tp3))}`\n"
+            message += f"🎯 TP3: <code>{format_price(float(tp3))}</code>\n"
         message += "\n"
         if stop_loss:
-            message += f"🛑 وقف الخسارة: `{format_price(float(stop_loss))}`"
+            message += f"🛑 وقف الخسارة: <code>{format_price(float(stop_loss))}</code>"
     
     return message
 
@@ -154,25 +153,25 @@ def format_buy_reverse_signal(data: dict) -> str:
     time = data.get('time', 'N/A')
     timeframe = data.get('timeframe', 'N/A')
     
-    message = f"🟠 *صفقة لونج عكسي \\(LONG REVERSE\\)* 🟠\n"
-    message += f"⚠️ *تم عكس الصفقة*\n\n"
-    message += f"📊 الرمز: {escape_markdown(symbol)}\n"
-    message += f"💰 سعر الدخول: `{format_price(entry_price)}`\n"
-    message += f"⏰ الوقت: {escape_markdown(time)}\n"
-    message += f"📈 الإطار الزمني: {escape_markdown(timeframe)}\n\n"
+    message = f"🟠 <b>صفقة لونج عكسي (LONG REVERSE)</b> 🟠\n"
+    message += f"⚠️ <b>تم عكس الصفقة</b>\n\n"
+    message += f"📊 الرمز: {escape_html(symbol)}\n"
+    message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+    message += f"⏰ الوقت: {escape_html(time)}\n"
+    message += f"📈 الإطار الزمني: {escape_html(timeframe)}\n\n"
     
     # عرض TP/SL المتاحة
     if tp1 or tp2 or tp3 or stop_loss:
-        message += f"🎯 *أهداف الربح:*\n"
+        message += f"🎯 <b>أهداف الربح:</b>\n"
         if tp1:
-            message += f"🎯 TP1: `{format_price(float(tp1))}`\n"
+            message += f"🎯 TP1: <code>{format_price(float(tp1))}</code>\n"
         if tp2:
-            message += f"🎯 TP2: `{format_price(float(tp2))}`\n"
+            message += f"🎯 TP2: <code>{format_price(float(tp2))}</code>\n"
         if tp3:
-            message += f"🎯 TP3: `{format_price(float(tp3))}`\n"
+            message += f"🎯 TP3: <code>{format_price(float(tp3))}</code>\n"
         message += "\n"
         if stop_loss:
-            message += f"🛑 وقف الخسارة: `{format_price(float(stop_loss))}`"
+            message += f"🛑 وقف الخسارة: <code>{format_price(float(stop_loss))}</code>"
     
     return message
 
@@ -187,25 +186,25 @@ def format_sell_reverse_signal(data: dict) -> str:
     time = data.get('time', 'N/A')
     timeframe = data.get('timeframe', 'N/A')
     
-    message = f"🟠 *صفقة شورت عكسي \\(SHORT REVERSE\\)* 🟠\n"
-    message += f"⚠️ *تم عكس الصفقة*\n\n"
-    message += f"📊 الرمز: {escape_markdown(symbol)}\n"
-    message += f"💰 سعر الدخول: `{format_price(entry_price)}`\n"
-    message += f"⏰ الوقت: {escape_markdown(time)}\n"
-    message += f"📈 الإطار الزمني: {escape_markdown(timeframe)}\n\n"
+    message = f"🟠 <b>صفقة شورت عكسي (SHORT REVERSE)</b> 🟠\n"
+    message += f"⚠️ <b>تم عكس الصفقة</b>\n\n"
+    message += f"📊 الرمز: {escape_html(symbol)}\n"
+    message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+    message += f"⏰ الوقت: {escape_html(time)}\n"
+    message += f"📈 الإطار الزمني: {escape_html(timeframe)}\n\n"
     
     # عرض TP/SL المتاحة
     if tp1 or tp2 or tp3 or stop_loss:
-        message += f"🎯 *أهداف الربح:*\n"
+        message += f"🎯 <b>أهداف الربح:</b>\n"
         if tp1:
-            message += f"🎯 TP1: `{format_price(float(tp1))}`\n"
+            message += f"🎯 TP1: <code>{format_price(float(tp1))}</code>\n"
         if tp2:
-            message += f"🎯 TP2: `{format_price(float(tp2))}`\n"
+            message += f"🎯 TP2: <code>{format_price(float(tp2))}</code>\n"
         if tp3:
-            message += f"🎯 TP3: `{format_price(float(tp3))}`\n"
+            message += f"🎯 TP3: <code>{format_price(float(tp3))}</code>\n"
         message += "\n"
         if stop_loss:
-            message += f"🛑 وقف الخسارة: `{format_price(float(stop_loss))}`"
+            message += f"🛑 وقف الخسارة: <code>{format_price(float(stop_loss))}</code>"
     
     return message
 
@@ -216,12 +215,12 @@ def format_tp1_hit(data: dict) -> str:
     exit_price = data.get('exit_price') or data.get('tp1') or data.get('price', 0)
     time = data.get('time', 'N/A')
     
-    message = f"🎯✅ *تم ضرب الهدف الأول \\(TP1\\)* ✅🎯\n\n"
-    message += f"📊 الرمز: {escape_markdown(symbol)}\n"
+    message = f"🎯✅ <b>تم ضرب الهدف الأول (TP1)</b> ✅🎯\n\n"
+    message += f"📊 الرمز: {escape_html(symbol)}\n"
     if entry_price:
-        message += f"💰 سعر الدخول: `{format_price(entry_price)}`\n"
-    message += f"💰 سعر الخروج: `{format_price(exit_price)}`\n"
-    message += f"⏰ الوقت: {escape_markdown(time)}"
+        message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+    message += f"💰 سعر الخروج: <code>{format_price(exit_price)}</code>\n"
+    message += f"⏰ الوقت: {escape_html(time)}"
     
     return message
 
@@ -232,12 +231,12 @@ def format_tp2_hit(data: dict) -> str:
     exit_price = data.get('exit_price') or data.get('tp2') or data.get('price', 0)
     time = data.get('time', 'N/A')
     
-    message = f"🎯✅ *تم ضرب الهدف الثاني \\(TP2\\)* ✅🎯\n\n"
-    message += f"📊 الرمز: {escape_markdown(symbol)}\n"
+    message = f"🎯✅ <b>تم ضرب الهدف الثاني (TP2)</b> ✅🎯\n\n"
+    message += f"📊 الرمز: {escape_html(symbol)}\n"
     if entry_price:
-        message += f"💰 سعر الدخول: `{format_price(entry_price)}`\n"
-    message += f"💰 سعر الخروج: `{format_price(exit_price)}`\n"
-    message += f"⏰ الوقت: {escape_markdown(time)}"
+        message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+    message += f"💰 سعر الخروج: <code>{format_price(exit_price)}</code>\n"
+    message += f"⏰ الوقت: {escape_html(time)}"
     
     return message
 
@@ -248,12 +247,12 @@ def format_tp3_hit(data: dict) -> str:
     exit_price = data.get('exit_price') or data.get('tp3') or data.get('price', 0)
     time = data.get('time', 'N/A')
     
-    message = f"🎯✅ *تم ضرب الهدف الثالث \\(TP3\\)* ✅🎯\n\n"
-    message += f"📊 الرمز: {escape_markdown(symbol)}\n"
+    message = f"🎯✅ <b>تم ضرب الهدف الثالث (TP3)</b> ✅🎯\n\n"
+    message += f"📊 الرمز: {escape_html(symbol)}\n"
     if entry_price:
-        message += f"💰 سعر الدخول: `{format_price(entry_price)}`\n"
-    message += f"💰 سعر الخروج: `{format_price(exit_price)}`\n"
-    message += f"⏰ الوقت: {escape_markdown(time)}"
+        message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+    message += f"💰 سعر الخروج: <code>{format_price(exit_price)}</code>\n"
+    message += f"⏰ الوقت: {escape_html(time)}"
     
     return message
 
@@ -264,12 +263,12 @@ def format_stop_loss_hit(data: dict) -> str:
     exit_price = data.get('exit_price') or data.get('stop_loss') or data.get('price', 0)
     time = data.get('time', 'N/A')
     
-    message = f"🛑😔 *تم ضرب وقف الخسارة \\(Stop Loss\\)* 😔🛑\n\n"
-    message += f"📊 الرمز: {escape_markdown(symbol)}\n"
+    message = f"🛑😔 <b>تم ضرب وقف الخسارة (Stop Loss)</b> 😔🛑\n\n"
+    message += f"📊 الرمز: {escape_html(symbol)}\n"
     if entry_price:
-        message += f"💰 سعر الدخول: `{format_price(entry_price)}`\n"
-    message += f"💰 سعر الخروج: `{format_price(exit_price)}`\n"
-    message += f"⏰ الوقت: {escape_markdown(time)}"
+        message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+    message += f"💰 سعر الخروج: <code>{format_price(exit_price)}</code>\n"
+    message += f"⏰ الوقت: {escape_html(time)}"
     
     return message
 
@@ -279,9 +278,9 @@ def send_startup_message() -> bool:
         from datetime import datetime
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        message = f"🤖 *تم تشغيل البوت بنجاح!*\n\n"
+        message = f"🤖 <b>تم تشغيل البوت بنجاح!</b>\n\n"
         message += f"✅ البوت جاهز لاستقبال الإشارات\n"
-        message += f"🕐 وقت البدء: {current_time}\n\n"
+        message += f"🕐 وقت البدء: {escape_html(current_time)}\n\n"
         message += f"📊 البوت يستقبل 8 أنواع من الإشارات:\n"
         message += f"• صفقة لونج (BUY)\n"
         message += f"• صفقة شورت (SELL)\n"
