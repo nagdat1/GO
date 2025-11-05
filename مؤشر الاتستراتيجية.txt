@@ -378,8 +378,8 @@ tp1Short     = f_cross(low,  tp1Line, false)
 switch
     leTrigger and condition[1] <=  0.0 => condition :=  1.0
     seTrigger and condition[1] >=  0.0 => condition := -1.0
-    tp3Long   and condition[1] ==  1.2 => condition :=  1.3
-    tp3Short  and condition[1] == -1.2 => condition := -1.3
+    tp3Long   and condition[1] ==  1.2 => condition :=  0.0  // إغلاق الصفقة عند TP3
+    tp3Short  and condition[1] == -1.2 => condition :=  0.0  // إغلاق الصفقة عند TP3
     tp2Long   and condition[1] ==  1.1 => condition :=  1.2
     tp2Short  and condition[1] == -1.1 => condition := -1.2
     tp1Long   and condition[1] ==  1.0 => condition :=  1.1
@@ -392,20 +392,22 @@ switch
 // ═══════════════════════════════════════════════════════════════════════════
 // 🔄 إشارات العكس (REVERSE) - عندما تعكس الصفقة قبل الوصول لـ TP3 أو SL
 // ═══════════════════════════════════════════════════════════════════════════
-// عندما يكون TPSType == "Trailing"، إذا كانت هناك صفقة مفتوحة وجاءت إشارة عكسية
-// يتم إغلاق الصفقة الحالية وفتح صفقة عكسية (كما في الاستراتيجية)
-// هذه الإشارات تسمى REVERSE لتتميز عن الإشارات العادية
+// الصفقة العكسية تحدث فقط عندما:
+// 1. هناك صفقة مفتوحة (condition[1] != 0.0)
+// 2. الصفقة لم تُغلق بعد (لم تصل لـ TP3 أو SL)
+// 3. جاءت إشارة عكسية (leTrigger أثناء Short، أو seTrigger أثناء Long)
 //
-// منطق العكس (كما في الاستراتيجية):
-// - إذا كان هناك Short مفتوح (condition[1] < 0) وجاء buySignal → إغلاق Short + فتح Long (REVERSE)
-// - إذا كان هناك Long مفتوح (condition[1] > 0) وجاء sellSignal → إغلاق Long + فتح Short (REVERSE)
+// ملاحظة مهمة: عندما تصل الصفقة لـ TP3، تُغلق تلقائياً (condition = 0.0)
+// لذلك أي إشارة جديدة بعد إغلاق الصفقة عند TP3 تكون عادية (ليست عكسية)
 
-// إشارة Long عكسية: عندما تأتي إشارة Buy أثناء وجود صفقة Short مفتوحة
+// إشارة Long عكسية: عندما تأتي إشارة Buy أثناء وجود صفقة Short مفتوحة (ولم تُغلق)
 // هذا يعني: Close Short + Open Long في نفس الوقت
+// شرط: condition[1] < 0 (صفقة Short مفتوحة) و condition == 1.0 (فتح Long)
 longE_Reverse = leTrigger and condition[1] < 0.0 and condition == 1.0 and TPSType == "Trailing"
 
-// إشارة Short عكسية: عندما تأتي إشارة Sell أثناء وجود صفقة Long مفتوحة
+// إشارة Short عكسية: عندما تأتي إشارة Sell أثناء وجود صفقة Long مفتوحة (ولم تُغلق)
 // هذا يعني: Close Long + Open Short في نفس الوقت
+// شرط: condition[1] > 0 (صفقة Long مفتوحة) و condition == -1.0 (فتح Short)
 shortE_Reverse = seTrigger and condition[1] > 0.0 and condition == -1.0 and TPSType == "Trailing"
 
 // ملاحظة: عندما يحدث العكس، لا توجد إشارة Close منفصلة
@@ -419,8 +421,8 @@ longX        = lxTrigger and condition[1] >=  1.0 and condition ==  0.0
 shortX       = sxTrigger and condition[1] <= -1.0 and condition ==  0.0
 longSL       = slLong    and condition[1] >=  1.0 and condition ==  0.0
 shortSL      = slShort   and condition[1] <= -1.0 and condition ==  0.0
-longTP3      = tp3Long   and condition[1] ==  1.2 and condition ==  1.3
-shortTP3     = tp3Short  and condition[1] == -1.2 and condition == -1.3
+longTP3      = tp3Long   and condition[1] ==  1.2 and condition ==  0.0  // إغلاق عند TP3
+shortTP3     = tp3Short  and condition[1] == -1.2 and condition ==  0.0  // إغلاق عند TP3
 longTP2      = tp2Long   and condition[1] ==  1.1 and condition ==  1.2
 shortTP2     = tp2Short  and condition[1] == -1.1 and condition == -1.2
 longTP1      = tp1Long   and condition[1] ==  1.0 and condition ==  1.1

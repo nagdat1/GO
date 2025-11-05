@@ -108,13 +108,21 @@ def webhook(chat_id=None):
         logger.info(f"✅ New signal: {signal} for {data.get('symbol', 'N/A')}")
         
         # Get target chat_id
+        # أولوية: 1) من URL (chat_id parameter), 2) من config.py
         target_chat_id = chat_id
         if not target_chat_id:
             from config import TELEGRAM_CHAT_ID
             target_chat_id = TELEGRAM_CHAT_ID
         
         if not target_chat_id:
-            return jsonify({"error": "No chat_id available"}), 500
+            logger.error("❌ No chat_id available - يجب تحديد Chat ID في URL أو config.py")
+            return jsonify({
+                "error": "No chat_id available",
+                "message": "يجب تحديد Chat ID في URL: /personal/<chat_id>/webhook أو في config.py",
+                "help": "راجع ملف كيفية_الحصول_على_Chat_ID_للمجموعة.md"
+            }), 500
+        
+        logger.info(f"📤 Target Chat ID: {target_chat_id}")
         
         # Route to appropriate formatter
         message = None

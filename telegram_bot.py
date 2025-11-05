@@ -28,21 +28,44 @@ def send_message(message: str, chat_id: str = None) -> bool:
     try:
         target_chat_id = chat_id or TELEGRAM_CHAT_ID
         if not target_chat_id:
-            logger.error("No chat ID provided")
+            logger.error("❌ No chat ID provided - يجب تحديد Chat ID")
             return False
         
+        # تحويل chat_id إلى string (للمجموعات قد يكون سالباً)
+        chat_id_str = str(target_chat_id)
+        
         payload = {
-            "chat_id": target_chat_id,
+            "chat_id": chat_id_str,
             "text": message,
             "parse_mode": "Markdown"
         }
         
+        logger.info(f"📤 Attempting to send message to chat_id: {chat_id_str}")
         response = requests.post(TELEGRAM_API_URL, json=payload, timeout=10)
-        response.raise_for_status()
-        logger.info(f"Message sent successfully to Telegram (chat_id: {target_chat_id})")
-        return True
+        
+        # التحقق من الاستجابة
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('ok'):
+                logger.info(f"✅ Message sent successfully to Telegram (chat_id: {chat_id_str})")
+                return True
+            else:
+                error_description = result.get('description', 'Unknown error')
+                logger.error(f"❌ Telegram API error: {error_description}")
+                if 'chat not found' in error_description.lower():
+                    logger.error("❌ المشكلة: Chat ID غير صحيح أو البوت غير عضو في المجموعة!")
+                elif 'bot was blocked' in error_description.lower():
+                    logger.error("❌ المشكلة: البوت محظور من المجموعة!")
+                return False
+        else:
+            logger.error(f"❌ HTTP Error {response.status_code}: {response.text}")
+            return False
+            
+    except requests.exceptions.RequestException as e:
+        logger.error(f"❌ Network error sending message: {e}")
+        return False
     except Exception as e:
-        logger.error(f"Error sending message: {e}")
+        logger.error(f"❌ Unexpected error sending message: {e}", exc_info=True)
         return False
 
 def format_buy_signal(data: dict) -> str:
