@@ -116,33 +116,62 @@ def format_buy_signal(data: dict) -> str:
     message += f"⏰ Time: {time}\n"
     message += f"📈 Timeframe: {timeframe}\n\n"
     
-    # Only show TP/SL if they exist (from JSON data, not estimated)
-    if tp1 is not None and tp2 is not None and tp3 is not None and stop_loss is not None:
-        tp1 = float(tp1)
-        tp2 = float(tp2)
-        tp3 = float(tp3)
-        stop_loss = float(stop_loss)
-        
-        # Calculate percentages
-        # For BUY: profit when price increases, so TP > Entry, SL < Entry
-        tp1_pct = ((tp1 - entry_price) / entry_price) * 100 if entry_price > 0 else 0
-        tp2_pct = ((tp2 - entry_price) / entry_price) * 100 if entry_price > 0 else 0
-        tp3_pct = ((tp3 - entry_price) / entry_price) * 100 if entry_price > 0 else 0
-        sl_pct = ((stop_loss - entry_price) / entry_price) * 100 if entry_price > 0 else 0
-        
-        # Validate and format signs correctly
-        tp1_sign = "+" if tp1_pct >= 0 else "-"
-        tp2_sign = "+" if tp2_pct >= 0 else "-"
-        tp3_sign = "+" if tp3_pct >= 0 else "-"
-        sl_sign = "-" if sl_pct < 0 else "+"
-        
+    # Show TP/SL if at least one exists (from JSON data, not estimated)
+    # Convert null/None to actual None for easier checking
+    tp1_clean = None if tp1 is None or (isinstance(tp1, str) and tp1.lower() == 'null') else tp1
+    tp2_clean = None if tp2 is None or (isinstance(tp2, str) and tp2.lower() == 'null') else tp2
+    tp3_clean = None if tp3 is None or (isinstance(tp3, str) and tp3.lower() == 'null') else tp3
+    stop_loss_clean = None if stop_loss is None or (isinstance(stop_loss, str) and stop_loss.lower() == 'null') else stop_loss
+    
+    # Check if we have any TP/SL data
+    has_tp_sl = any([tp1_clean, tp2_clean, tp3_clean, stop_loss_clean])
+    
+    if has_tp_sl:
         message += f"🎯 *Take Profit Targets:*\n"
-        message += f"🎯 TP1: {format_price(tp1)} ({tp1_sign}{abs(tp1_pct):.2f}%)\n"
-        message += f"🎯 TP2: {format_price(tp2)} ({tp2_sign}{abs(tp2_pct):.2f}%)\n"
-        message += f"🎯 TP3: {format_price(tp3)} ({tp3_sign}{abs(tp3_pct):.2f}%)\n\n"
-        message += f"🛑 Stop Loss: {format_price(stop_loss)} ({sl_sign}{abs(sl_pct):.2f}%)"
+        
+        # Show TP1 if available
+        if tp1_clean is not None:
+            try:
+                tp1_val = float(tp1_clean)
+                tp1_pct = ((tp1_val - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+                tp1_sign = "+" if tp1_pct >= 0 else "-"
+                message += f"🎯 TP1: {format_price(tp1_val)} ({tp1_sign}{abs(tp1_pct):.2f}%)\n"
+            except (ValueError, TypeError):
+                pass
+        
+        # Show TP2 if available
+        if tp2_clean is not None:
+            try:
+                tp2_val = float(tp2_clean)
+                tp2_pct = ((tp2_val - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+                tp2_sign = "+" if tp2_pct >= 0 else "-"
+                message += f"🎯 TP2: {format_price(tp2_val)} ({tp2_sign}{abs(tp2_pct):.2f}%)\n"
+            except (ValueError, TypeError):
+                pass
+        
+        # Show TP3 if available
+        if tp3_clean is not None:
+            try:
+                tp3_val = float(tp3_clean)
+                tp3_pct = ((tp3_val - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+                tp3_sign = "+" if tp3_pct >= 0 else "-"
+                message += f"🎯 TP3: {format_price(tp3_val)} ({tp3_sign}{abs(tp3_pct):.2f}%)\n"
+            except (ValueError, TypeError):
+                pass
+        
+        message += "\n"
+        
+        # Show Stop Loss if available
+        if stop_loss_clean is not None:
+            try:
+                sl_val = float(stop_loss_clean)
+                sl_pct = ((sl_val - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+                sl_sign = "-" if sl_pct < 0 else "+"
+                message += f"🛑 Stop Loss: {format_price(sl_val)} ({sl_sign}{abs(sl_pct):.2f}%)"
+            except (ValueError, TypeError):
+                pass
     else:
-        # Text alert - no TP/SL data available
+        # No TP/SL data available
         if entry_price == 0:
             message += f"⚠️ *ERROR:* Real price not available!\n"
             message += f"📌 Text alert contains Position Size instead of Price.\n"
@@ -189,35 +218,62 @@ def format_sell_signal(data: dict) -> str:
     message += f"⏰ Time: {time}\n"
     message += f"📈 Timeframe: {timeframe}\n\n"
     
-    # Only show TP/SL if they exist (from JSON data, not estimated)
-    if tp1 is not None and tp2 is not None and tp3 is not None and stop_loss is not None:
-        tp1 = float(tp1)
-        tp2 = float(tp2)
-        tp3 = float(tp3)
-        stop_loss = float(stop_loss)
-        
-        # Calculate percentages (for SELL, profit when price goes down)
-        # TP should be lower than entry for SELL
-        # For SELL: profit when price decreases, so TP < Entry, SL > Entry
-        tp1_pct = ((entry_price - tp1) / entry_price) * 100 if entry_price > 0 else 0
-        tp2_pct = ((entry_price - tp2) / entry_price) * 100 if entry_price > 0 else 0
-        tp3_pct = ((entry_price - tp3) / entry_price) * 100 if entry_price > 0 else 0
-        # SL is higher than entry for SELL (loss if price goes up)
-        sl_pct = ((stop_loss - entry_price) / entry_price) * 100 if entry_price > 0 else 0
-        
-        # Validate and format signs correctly
-        tp1_sign = "+" if tp1_pct >= 0 else "-"
-        tp2_sign = "+" if tp2_pct >= 0 else "-"
-        tp3_sign = "+" if tp3_pct >= 0 else "-"
-        sl_sign = "-" if sl_pct > 0 else "+"
-        
+    # Show TP/SL if at least one exists (from JSON data, not estimated)
+    # Convert null/None to actual None for easier checking
+    tp1_clean = None if tp1 is None or (isinstance(tp1, str) and tp1.lower() == 'null') else tp1
+    tp2_clean = None if tp2 is None or (isinstance(tp2, str) and tp2.lower() == 'null') else tp2
+    tp3_clean = None if tp3 is None or (isinstance(tp3, str) and tp3.lower() == 'null') else tp3
+    stop_loss_clean = None if stop_loss is None or (isinstance(stop_loss, str) and stop_loss.lower() == 'null') else stop_loss
+    
+    # Check if we have any TP/SL data
+    has_tp_sl = any([tp1_clean, tp2_clean, tp3_clean, stop_loss_clean])
+    
+    if has_tp_sl:
         message += f"🎯 *Take Profit Targets:*\n"
-        message += f"🎯 TP1: {format_price(tp1)} ({tp1_sign}{abs(tp1_pct):.2f}%)\n"
-        message += f"🎯 TP2: {format_price(tp2)} ({tp2_sign}{abs(tp2_pct):.2f}%)\n"
-        message += f"🎯 TP3: {format_price(tp3)} ({tp3_sign}{abs(tp3_pct):.2f}%)\n\n"
-        message += f"🛑 Stop Loss: {format_price(stop_loss)} ({sl_sign}{abs(sl_pct):.2f}%)"
+        
+        # Show TP1 if available
+        if tp1_clean is not None:
+            try:
+                tp1_val = float(tp1_clean)
+                tp1_pct = ((entry_price - tp1_val) / entry_price) * 100 if entry_price > 0 else 0
+                tp1_sign = "+" if tp1_pct >= 0 else "-"
+                message += f"🎯 TP1: {format_price(tp1_val)} ({tp1_sign}{abs(tp1_pct):.2f}%)\n"
+            except (ValueError, TypeError):
+                pass
+        
+        # Show TP2 if available
+        if tp2_clean is not None:
+            try:
+                tp2_val = float(tp2_clean)
+                tp2_pct = ((entry_price - tp2_val) / entry_price) * 100 if entry_price > 0 else 0
+                tp2_sign = "+" if tp2_pct >= 0 else "-"
+                message += f"🎯 TP2: {format_price(tp2_val)} ({tp2_sign}{abs(tp2_pct):.2f}%)\n"
+            except (ValueError, TypeError):
+                pass
+        
+        # Show TP3 if available
+        if tp3_clean is not None:
+            try:
+                tp3_val = float(tp3_clean)
+                tp3_pct = ((entry_price - tp3_val) / entry_price) * 100 if entry_price > 0 else 0
+                tp3_sign = "+" if tp3_pct >= 0 else "-"
+                message += f"🎯 TP3: {format_price(tp3_val)} ({tp3_sign}{abs(tp3_pct):.2f}%)\n"
+            except (ValueError, TypeError):
+                pass
+        
+        message += "\n"
+        
+        # Show Stop Loss if available
+        if stop_loss_clean is not None:
+            try:
+                sl_val = float(stop_loss_clean)
+                sl_pct = ((sl_val - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+                sl_sign = "-" if sl_pct > 0 else "+"
+                message += f"🛑 Stop Loss: {format_price(sl_val)} ({sl_sign}{abs(sl_pct):.2f}%)"
+            except (ValueError, TypeError):
+                pass
     else:
-        # Text alert - no TP/SL data available
+        # No TP/SL data available
         if entry_price == 0:
             message += f"⚠️ *ERROR:* Real price not available!\n"
             message += f"📌 Text alert contains Position Size instead of Price.\n"
@@ -265,33 +321,62 @@ def format_buy_reverse_signal(data: dict) -> str:
     message += f"⏰ Time: {time}\n"
     message += f"📈 Timeframe: {timeframe}\n\n"
     
-    # Only show TP/SL if they exist (from JSON data, not estimated)
-    if tp1 is not None and tp2 is not None and tp3 is not None and stop_loss is not None:
-        tp1 = float(tp1)
-        tp2 = float(tp2)
-        tp3 = float(tp3)
-        stop_loss = float(stop_loss)
-        
-        # Calculate percentages
-        # For BUY: profit when price increases, so TP > Entry, SL < Entry
-        tp1_pct = ((tp1 - entry_price) / entry_price) * 100 if entry_price > 0 else 0
-        tp2_pct = ((tp2 - entry_price) / entry_price) * 100 if entry_price > 0 else 0
-        tp3_pct = ((tp3 - entry_price) / entry_price) * 100 if entry_price > 0 else 0
-        sl_pct = ((stop_loss - entry_price) / entry_price) * 100 if entry_price > 0 else 0
-        
-        # Validate and format signs correctly
-        tp1_sign = "+" if tp1_pct >= 0 else "-"
-        tp2_sign = "+" if tp2_pct >= 0 else "-"
-        tp3_sign = "+" if tp3_pct >= 0 else "-"
-        sl_sign = "-" if sl_pct < 0 else "+"
-        
+    # Show TP/SL if at least one exists (from JSON data, not estimated)
+    # Convert null/None to actual None for easier checking
+    tp1_clean = None if tp1 is None or (isinstance(tp1, str) and tp1.lower() == 'null') else tp1
+    tp2_clean = None if tp2 is None or (isinstance(tp2, str) and tp2.lower() == 'null') else tp2
+    tp3_clean = None if tp3 is None or (isinstance(tp3, str) and tp3.lower() == 'null') else tp3
+    stop_loss_clean = None if stop_loss is None or (isinstance(stop_loss, str) and stop_loss.lower() == 'null') else stop_loss
+    
+    # Check if we have any TP/SL data
+    has_tp_sl = any([tp1_clean, tp2_clean, tp3_clean, stop_loss_clean])
+    
+    if has_tp_sl:
         message += f"🎯 *Take Profit Targets:*\n"
-        message += f"🎯 TP1: {format_price(tp1)} ({tp1_sign}{abs(tp1_pct):.2f}%)\n"
-        message += f"🎯 TP2: {format_price(tp2)} ({tp2_sign}{abs(tp2_pct):.2f}%)\n"
-        message += f"🎯 TP3: {format_price(tp3)} ({tp3_sign}{abs(tp3_pct):.2f}%)\n\n"
-        message += f"🛑 Stop Loss: {format_price(stop_loss)} ({sl_sign}{abs(sl_pct):.2f}%)"
+        
+        # Show TP1 if available
+        if tp1_clean is not None:
+            try:
+                tp1_val = float(tp1_clean)
+                tp1_pct = ((tp1_val - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+                tp1_sign = "+" if tp1_pct >= 0 else "-"
+                message += f"🎯 TP1: {format_price(tp1_val)} ({tp1_sign}{abs(tp1_pct):.2f}%)\n"
+            except (ValueError, TypeError):
+                pass
+        
+        # Show TP2 if available
+        if tp2_clean is not None:
+            try:
+                tp2_val = float(tp2_clean)
+                tp2_pct = ((tp2_val - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+                tp2_sign = "+" if tp2_pct >= 0 else "-"
+                message += f"🎯 TP2: {format_price(tp2_val)} ({tp2_sign}{abs(tp2_pct):.2f}%)\n"
+            except (ValueError, TypeError):
+                pass
+        
+        # Show TP3 if available
+        if tp3_clean is not None:
+            try:
+                tp3_val = float(tp3_clean)
+                tp3_pct = ((tp3_val - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+                tp3_sign = "+" if tp3_pct >= 0 else "-"
+                message += f"🎯 TP3: {format_price(tp3_val)} ({tp3_sign}{abs(tp3_pct):.2f}%)\n"
+            except (ValueError, TypeError):
+                pass
+        
+        message += "\n"
+        
+        # Show Stop Loss if available
+        if stop_loss_clean is not None:
+            try:
+                sl_val = float(stop_loss_clean)
+                sl_pct = ((sl_val - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+                sl_sign = "-" if sl_pct < 0 else "+"
+                message += f"🛑 Stop Loss: {format_price(sl_val)} ({sl_sign}{abs(sl_pct):.2f}%)"
+            except (ValueError, TypeError):
+                pass
     else:
-        # Text alert - no TP/SL data available
+        # No TP/SL data available
         if entry_price == 0:
             message += f"⚠️ *ERROR:* Real price not available!\n"
             message += f"📌 Text alert contains Position Size instead of Price.\n"
@@ -339,35 +424,62 @@ def format_sell_reverse_signal(data: dict) -> str:
     message += f"⏰ Time: {time}\n"
     message += f"📈 Timeframe: {timeframe}\n\n"
     
-    # Only show TP/SL if they exist (from JSON data, not estimated)
-    if tp1 is not None and tp2 is not None and tp3 is not None and stop_loss is not None:
-        tp1 = float(tp1)
-        tp2 = float(tp2)
-        tp3 = float(tp3)
-        stop_loss = float(stop_loss)
-        
-        # Calculate percentages (for SELL, profit when price goes down)
-        # TP should be lower than entry for SELL
-        # For SELL: profit when price decreases, so TP < Entry, SL > Entry
-        tp1_pct = ((entry_price - tp1) / entry_price) * 100 if entry_price > 0 else 0
-        tp2_pct = ((entry_price - tp2) / entry_price) * 100 if entry_price > 0 else 0
-        tp3_pct = ((entry_price - tp3) / entry_price) * 100 if entry_price > 0 else 0
-        # SL is higher than entry for SELL (loss if price goes up)
-        sl_pct = ((stop_loss - entry_price) / entry_price) * 100 if entry_price > 0 else 0
-        
-        # Validate and format signs correctly
-        tp1_sign = "+" if tp1_pct >= 0 else "-"
-        tp2_sign = "+" if tp2_pct >= 0 else "-"
-        tp3_sign = "+" if tp3_pct >= 0 else "-"
-        sl_sign = "-" if sl_pct > 0 else "+"
-        
+    # Show TP/SL if at least one exists (from JSON data, not estimated)
+    # Convert null/None to actual None for easier checking
+    tp1_clean = None if tp1 is None or (isinstance(tp1, str) and tp1.lower() == 'null') else tp1
+    tp2_clean = None if tp2 is None or (isinstance(tp2, str) and tp2.lower() == 'null') else tp2
+    tp3_clean = None if tp3 is None or (isinstance(tp3, str) and tp3.lower() == 'null') else tp3
+    stop_loss_clean = None if stop_loss is None or (isinstance(stop_loss, str) and stop_loss.lower() == 'null') else stop_loss
+    
+    # Check if we have any TP/SL data
+    has_tp_sl = any([tp1_clean, tp2_clean, tp3_clean, stop_loss_clean])
+    
+    if has_tp_sl:
         message += f"🎯 *Take Profit Targets:*\n"
-        message += f"🎯 TP1: {format_price(tp1)} ({tp1_sign}{abs(tp1_pct):.2f}%)\n"
-        message += f"🎯 TP2: {format_price(tp2)} ({tp2_sign}{abs(tp2_pct):.2f}%)\n"
-        message += f"🎯 TP3: {format_price(tp3)} ({tp3_sign}{abs(tp3_pct):.2f}%)\n\n"
-        message += f"🛑 Stop Loss: {format_price(stop_loss)} ({sl_sign}{abs(sl_pct):.2f}%)"
+        
+        # Show TP1 if available
+        if tp1_clean is not None:
+            try:
+                tp1_val = float(tp1_clean)
+                tp1_pct = ((entry_price - tp1_val) / entry_price) * 100 if entry_price > 0 else 0
+                tp1_sign = "+" if tp1_pct >= 0 else "-"
+                message += f"🎯 TP1: {format_price(tp1_val)} ({tp1_sign}{abs(tp1_pct):.2f}%)\n"
+            except (ValueError, TypeError):
+                pass
+        
+        # Show TP2 if available
+        if tp2_clean is not None:
+            try:
+                tp2_val = float(tp2_clean)
+                tp2_pct = ((entry_price - tp2_val) / entry_price) * 100 if entry_price > 0 else 0
+                tp2_sign = "+" if tp2_pct >= 0 else "-"
+                message += f"🎯 TP2: {format_price(tp2_val)} ({tp2_sign}{abs(tp2_pct):.2f}%)\n"
+            except (ValueError, TypeError):
+                pass
+        
+        # Show TP3 if available
+        if tp3_clean is not None:
+            try:
+                tp3_val = float(tp3_clean)
+                tp3_pct = ((entry_price - tp3_val) / entry_price) * 100 if entry_price > 0 else 0
+                tp3_sign = "+" if tp3_pct >= 0 else "-"
+                message += f"🎯 TP3: {format_price(tp3_val)} ({tp3_sign}{abs(tp3_pct):.2f}%)\n"
+            except (ValueError, TypeError):
+                pass
+        
+        message += "\n"
+        
+        # Show Stop Loss if available
+        if stop_loss_clean is not None:
+            try:
+                sl_val = float(stop_loss_clean)
+                sl_pct = ((sl_val - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+                sl_sign = "-" if sl_pct > 0 else "+"
+                message += f"🛑 Stop Loss: {format_price(sl_val)} ({sl_sign}{abs(sl_pct):.2f}%)"
+            except (ValueError, TypeError):
+                pass
     else:
-        # Text alert - no TP/SL data available
+        # No TP/SL data available
         if entry_price == 0:
             message += f"⚠️ *ERROR:* Real price not available!\n"
             message += f"📌 Text alert contains Position Size instead of Price.\n"
