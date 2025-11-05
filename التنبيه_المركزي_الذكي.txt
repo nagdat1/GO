@@ -18,13 +18,19 @@
 
 4️⃣ في قسم "Message" (الرسالة):
    
-   ⚠️ استخدم JSON format التالي (يجب أن يكون في سطر واحد):
+   ⚠️ مهم جداً: يجب وضع محتوى في Message field (لا تتركه فارغاً!)
    
-   للإشارات (Entry Signals - BUY/SELL/REVERSE):
-   {"signal":{{plot("Signal Type Code")}},"symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP Line 1")}},"tp2":{{plot("TP Line 2")}},"tp3":{{plot("TP Line 3")}},"stop_loss":{{plot("SL Line")}},"time":"{{time}}","timeframe":"{{interval}}"}
+   الحل الأفضل: ضع `alertcondition message` نفسه في Message field:
+   
+   SIGNAL_CODE:{{plot("Signal Type Code")}}|SYMBOL:{{ticker}}|PRICE:{{close}}|TIME:{{time}}|TF:{{interval}}
+   
+   ثم أضف JSON للحصول على TP/SL (في نفس السطر):
+   
+   SIGNAL_CODE:{{plot("Signal Type Code")}}|SYMBOL:{{ticker}}|PRICE:{{close}}|TIME:{{time}}|TF:{{interval}} {"signal":{{plot("Signal Type Code")}},"symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP Line 1")}},"tp2":{{plot("TP Line 2")}},"tp3":{{plot("TP Line 3")}},"stop_loss":{{plot("SL Line")}},"time":"{{time}}","timeframe":"{{interval}}"}
    
    ⚠️ ملاحظة مهمة: 
-   - "signal" في JSON سيكون رقم (1-8)
+   - المشروع سيقرأ `SIGNAL_CODE` من النص ويستبدل `{{plot_22}}` في JSON تلقائياً
+   - "signal" في JSON سيكون رقم (1-8) بعد الاستبدال
    - المشروع سيحوله تلقائياً إلى اسم الإشارة:
      • 1 = BUY
      • 2 = SELL  

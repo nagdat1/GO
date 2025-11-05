@@ -35,6 +35,90 @@ app = Flask(__name__)
 # Simple cache to prevent duplicate messages (last 5 minutes)
 recent_messages = {}
 
+# ═══════════════════════════════════════════════════════════════════════════
+# 🧠 نظام الذاكرة لتتبع الصفقات المفتوحة وتحديد الإشارات العكسية
+# ═══════════════════════════════════════════════════════════════════════════
+# Memory system to track open positions and detect reverse signals
+# Format: {symbol: signal_type} where signal_type is 'BUY' or 'SELL'
+open_positions = {}
+_open_positions_lock = threading.Lock()
+
+def get_open_position(symbol: str) -> str:
+    """
+    Get the current open position type for a symbol
+    Returns: 'BUY', 'SELL', or None if no position open
+    """
+    with _open_positions_lock:
+        return open_positions.get(symbol, None)
+
+def set_open_position(symbol: str, signal_type: str):
+    """
+    Set/open a new position for a symbol
+    Args:
+        symbol: Trading symbol (e.g., 'BTCUSDT')
+        signal_type: 'BUY' or 'SELL'
+    """
+    if signal_type not in ['BUY', 'SELL']:
+        logger.warning(f"⚠️ Invalid signal type for position: {signal_type} (expected BUY or SELL)")
+        return
+    
+    with _open_positions_lock:
+        old_position = open_positions.get(symbol, None)
+        open_positions[symbol] = signal_type
+        if old_position:
+            logger.info(f"📝 Updated position for {symbol}: {old_position} → {signal_type}")
+        else:
+            logger.info(f"📝 Opened new position for {symbol}: {signal_type}")
+
+def clear_open_position(symbol: str):
+    """
+    Close/clear position for a symbol (when TP3 or STOP_LOSS is hit)
+    Args:
+        symbol: Trading symbol (e.g., 'BTCUSDT')
+    """
+    with _open_positions_lock:
+        if symbol in open_positions:
+            old_position = open_positions[symbol]
+            del open_positions[symbol]
+            logger.info(f"🗑️ Closed position for {symbol}: {old_position} (removed from memory)")
+        else:
+            logger.debug(f"⚠️ Attempted to clear position for {symbol} but no position found")
+
+def detect_reverse_signal(symbol: str, incoming_signal: str) -> str:
+    """
+    Detect if an incoming signal is a REVERSE signal based on open position
+    Args:
+        symbol: Trading symbol
+        incoming_signal: 'BUY' or 'SELL'
+    Returns:
+        'BUY_REVERSE', 'SELL_REVERSE', or original signal if not a reverse
+    """
+    if incoming_signal not in ['BUY', 'SELL']:
+        # Not an entry signal, return as-is
+        return incoming_signal
+    
+    current_position = get_open_position(symbol)
+    
+    if current_position is None:
+        # No open position - this is a normal entry signal
+        logger.info(f"✅ Normal {incoming_signal} signal for {symbol} (no open position)")
+        return incoming_signal
+    
+    # Check if this is a reverse signal
+    if current_position == 'BUY' and incoming_signal == 'SELL':
+        # Had BUY position, new SELL signal → SELL_REVERSE
+        logger.info(f"🔄 REVERSE detected for {symbol}: {current_position} → {incoming_signal} → SELL_REVERSE")
+        return 'SELL_REVERSE'
+    elif current_position == 'SELL' and incoming_signal == 'BUY':
+        # Had SELL position, new BUY signal → BUY_REVERSE
+        logger.info(f"🔄 REVERSE detected for {symbol}: {current_position} → {incoming_signal} → BUY_REVERSE")
+        return 'BUY_REVERSE'
+    else:
+        # Same direction (BUY→BUY or SELL→SELL) - this shouldn't happen normally
+        # but we'll treat it as a normal signal (maybe position was already closed)
+        logger.warning(f"⚠️ Same direction signal for {symbol}: {current_position} → {incoming_signal} (treating as normal)")
+        return incoming_signal
+
 def get_message_key(data: dict) -> str:
     """Generate a unique key for a message to detect duplicates"""
     signal = data.get('signal', '')
@@ -128,10 +212,30 @@ def parse_tradingview_text_alert(text: str) -> dict:
                     value = value.strip()
                     
                     if key == 'SIGNAL_CODE':
-                        # Convert signal code to signal name
-                        signal_name = signal_code_map.get(value, 'UNKNOWN')
-                        result['signal'] = signal_name
-                        logger.info(f"📊 Converted Signal Code {value} → {signal_name}")
+                        # Handle case where value is {{plot_22}} or {{plot("Signal Type Code")}}
+                        # Try to extract signal code from JSON if available
+                        if '{{plot' in value:
+                            logger.warning(f"⚠️ SIGNAL_CODE contains plot placeholder: {value}")
+                            # Try to extract from JSON in the same message
+                            json_match_in_text = re.search(r'"signal"\s*:\s*(\d+)', text)
+                            if json_match_in_text:
+                                value = json_match_in_text.group(1)
+                                logger.info(f"✅ Extracted signal code from JSON: {value}")
+                            else:
+                                # If not found, try to find SIGNAL_CODE with actual number elsewhere
+                                signal_code_direct = re.search(r'SIGNAL_CODE\s*:\s*(\d+)', text)
+                                if signal_code_direct:
+                                    value = signal_code_direct.group(1)
+                                    logger.info(f"✅ Found SIGNAL_CODE with actual number: {value}")
+                                else:
+                                    logger.warning(f"⚠️ Cannot extract signal code - will try to detect from context")
+                                    value = None  # Will be detected from context later
+                        
+                        if value and value not in ['{{plot_22}}', '{{plot("Signal Type Code")}}']:
+                            # Convert signal code to signal name
+                            signal_name = signal_code_map.get(value, 'UNKNOWN')
+                            result['signal'] = signal_name
+                            logger.info(f"📊 Converted Signal Code {value} → {signal_name}")
                     elif key == 'SIGNAL':
                         # Direct signal name (for backward compatibility)
                         result['signal'] = value.upper()
@@ -505,11 +609,49 @@ def webhook(chat_id=None):
                     # Try to find JSON object with "signal" key
                     json_match = json_re.search(r'\{[^{}]*"signal"[^{}]*\}', raw_data_cleaned, json_re.DOTALL)
                 if not json_match:
-                    # Try more flexible pattern
-                    json_match = json_re.search(r'\{.*"signal".*\}', raw_data_cleaned, json_re.DOTALL)
+                    # Try to find complete JSON object by matching braces
+                    # Start from the last { and find matching }
+                    brace_start = raw_data_cleaned.rfind('{')
+                    if brace_start != -1:
+                        brace_count = 0
+                        for i in range(brace_start, len(raw_data_cleaned)):
+                            if raw_data_cleaned[i] == '{':
+                                brace_count += 1
+                            elif raw_data_cleaned[i] == '}':
+                                brace_count -= 1
+                                if brace_count == 0:
+                                    potential_json = raw_data_cleaned[brace_start:i+1]
+                                    if '"signal"' in potential_json:
+                                        # Use the complete JSON string directly
+                                        json_match = type('Match', (), {'group': lambda x: potential_json})()
+                                        break
+                if not json_match:
+                    # Try more flexible pattern - find JSON that starts with { and ends with }
+                    # Look for JSON object that contains "signal" and is properly closed
+                    json_match = json_re.search(r'\{.*?"signal".*?\}', raw_data_cleaned, json_re.DOTALL)
                 
                 if json_match:
                     json_str = json_match.group(0)
+                    
+                    # Clean JSON: Remove any text before the first {
+                    # This handles cases where regex matched text before JSON
+                    if '{' in json_str:
+                        json_start = json_str.find('{')
+                        json_str = json_str[json_start:]
+                        # Also ensure we have complete JSON by finding matching closing brace
+                        brace_count = 0
+                        json_end = -1
+                        for i, char in enumerate(json_str):
+                            if char == '{':
+                                brace_count += 1
+                            elif char == '}':
+                                brace_count -= 1
+                                if brace_count == 0:
+                                    json_end = i + 1
+                                    break
+                        if json_end > 0:
+                            json_str = json_str[:json_end]
+                    
                     logger.info(f"Found JSON in text (length: {len(json_str)} chars): {json_str[:200]}...")
                     
                     # Fix: Replace TradingView plot placeholders with actual values or extract them
@@ -522,14 +664,29 @@ def webhook(chat_id=None):
                     # يجب استخراج SIGNAL_CODE من النص قبل JSON
                     signal_code_from_alert = None
                     
-                    # البحث عن SIGNAL_CODE في الرسالة (قبل أو بعد JSON)
-                    # Pattern 1: SIGNAL_CODE:1|SYMBOL:... (format من alertcondition message)
+                    # أولاً: حاول استخراج SIGNAL_CODE من alertcondition message (قبل JSON)
+                    # Pattern: SIGNAL_CODE:{{plot_22}}|SYMBOL:... قبل JSON
+                    # لكن المشكلة: TradingView يرسل {{plot_22}} وليس رقم
+                    # الحل: نحتاج لاستخدام plot number (plot_22) لاستخراج القيمة
+                    
+                    # البحث عن SIGNAL_CODE مع رقم مباشر (1-8)
+                    # Pattern 1: SIGNAL_CODE:1|SYMBOL:... (format صحيح)
                     signal_code_match = re.search(r'SIGNAL_CODE\s*:\s*(\d+)', raw_data_cleaned, re.IGNORECASE)
                     if signal_code_match:
                         signal_code_from_alert = signal_code_match.group(1)
-                        logger.info(f"✅ Found SIGNAL_CODE in alertcondition message: {signal_code_from_alert}")
+                        logger.info(f"✅ Found SIGNAL_CODE with number in alertcondition message: {signal_code_from_alert}")
                     
-                    # Pattern 2: SIGNAL_CODE=1 أو SIGNAL_CODE = 1
+                    # Pattern 2: إذا كان SIGNAL_CODE يحتوي على {{plot_22}}، نحتاج لاستخراج رقم من plot number
+                    # plot_22 يعني plot رقم 22، لكن هذا لا يعطينا القيمة الفعلية
+                    # الحل: نحاول استخراج رقم من JSON بعد الاستبدال
+                    if not signal_code_from_alert:
+                        # البحث عن SIGNAL_CODE مع plot placeholder
+                        signal_code_with_plot = re.search(r'SIGNAL_CODE\s*:\s*\{\{plot[^}]+\}\}', raw_data_cleaned, re.IGNORECASE)
+                        if signal_code_with_plot:
+                            logger.warning("⚠️ SIGNAL_CODE contains plot placeholder - cannot extract actual value")
+                            # سنستخدم fallback: تحديد من السياق
+                    
+                    # Pattern 3: SIGNAL_CODE=1 أو SIGNAL_CODE = 1
                     if not signal_code_from_alert:
                         signal_code_match2 = re.search(r'SIGNAL[_\s]*CODE\s*[:=]\s*(\d+)', raw_data_cleaned, re.IGNORECASE)
                         if signal_code_match2:
@@ -546,8 +703,9 @@ def webhook(chat_id=None):
                             logger.info(f"✅ Fixed signal field using SIGNAL_CODE from alertcondition message: {signal_code_from_alert}")
                         else:
                             # إذا لم يوجد SIGNAL_CODE، استبدل بـ 0 (unknown)
+                            # ثم سيتم تحديد نوع الإشارة من السياق (TP/SL values)
                             json_str = re.sub(r'\{\{plot[^}]+\}\}', '0', json_str)
-                            logger.warning("⚠️ Replaced plot placeholder with 0 (SIGNAL_CODE not found in message)")
+                            logger.warning("⚠️ Replaced plot placeholder with 0 (SIGNAL_CODE not found in message - will detect from context)")
                     
                     # أيضاً: إذا كان signal = 0 في JSON الموجود، حاول استبداله بـ SIGNAL_CODE
                     if signal_code_from_alert and '"signal":0' in json_str:
@@ -743,12 +901,14 @@ def webhook(chat_id=None):
             tp3 = data.get('tp3')
             stop_loss = data.get('stop_loss')
             
+            logger.info(f"Context data: entry_price={entry_price}, tp1={tp1}, tp2={tp2}, tp3={tp3}, stop_loss={stop_loss}")
+            
             # If we have TP/SL values, try to determine BUY vs SELL from price relationships
-            if entry_price and (tp1 or tp2 or tp3 or stop_loss):
+            if entry_price and entry_price > 0 and (tp1 or tp2 or tp3 or stop_loss):
                 # For BUY: TP > Entry, SL < Entry
                 # For SELL: TP < Entry, SL > Entry
                 tp_value = tp1 or tp2 or tp3
-                if tp_value and stop_loss:
+                if tp_value and stop_loss and tp_value > 0 and stop_loss > 0:
                     if tp_value > entry_price and stop_loss < entry_price:
                         signal = 'BUY'
                         logger.info(f"✅ Detected BUY signal from context: TP ({tp_value}) > Entry ({entry_price}) > SL ({stop_loss})")
@@ -759,7 +919,7 @@ def webhook(chat_id=None):
                         # Default to BUY if relationship is unclear
                         signal = 'BUY'
                         logger.warning(f"⚠️ Cannot determine BUY/SELL from price relationships - defaulting to BUY")
-                elif tp_value:
+                elif tp_value and tp_value > 0:
                     # Only TP available, check if it's above or below entry
                     if tp_value > entry_price:
                         signal = 'BUY'
@@ -767,17 +927,53 @@ def webhook(chat_id=None):
                     else:
                         signal = 'SELL'
                         logger.info(f"✅ Detected SELL signal from context: TP ({tp_value}) < Entry ({entry_price})")
+                elif stop_loss and stop_loss > 0:
+                    # Only SL available, check if it's above or below entry
+                    if stop_loss < entry_price:
+                        signal = 'BUY'
+                        logger.info(f"✅ Detected BUY signal from context: SL ({stop_loss}) < Entry ({entry_price})")
+                    else:
+                        signal = 'SELL'
+                        logger.info(f"✅ Detected SELL signal from context: SL ({stop_loss}) > Entry ({entry_price})")
                 else:
                     # Default to BUY if we can't determine
                     signal = 'BUY'
                     logger.warning("⚠️ Detected entry signal structure but cannot determine BUY/SELL - defaulting to BUY")
             else:
-                logger.error("❌ Cannot determine signal type from context - missing entry_price or TP/SL values")
+                logger.error(f"❌ Cannot determine signal type from context - entry_price={entry_price}, tp1={tp1}, tp2={tp2}, tp3={tp3}, stop_loss={stop_loss}")
                 signal = 'UNKNOWN'
         
         logger.info(f"Signal type: {signal}")
         logger.info(f"Symbol: {data.get('symbol', 'N/A')}")
         
+        # ═══════════════════════════════════════════════════════════════════════════
+        # 🧠 نظام الذاكرة: تحديد الإشارات العكسية تلقائياً
+        # ═══════════════════════════════════════════════════════════════════════════
+        symbol = data.get('symbol', '')
+        if symbol:
+            # إذا كانت الإشارة BUY أو SELL، تحقق من نظام الذاكرة لتحديد REVERSE
+            if signal in ['BUY', 'SELL']:
+                # استخدام نظام الذاكرة لتحديد إذا كانت الإشارة عكسية
+                detected_signal = detect_reverse_signal(symbol, signal)
+                if detected_signal != signal:
+                    logger.info(f"🔄 Signal changed due to memory system: {signal} → {detected_signal}")
+                    signal = detected_signal
+                    # تحديث data['signal'] أيضاً
+                    data['signal'] = signal
+            
+            # حفظ الصفقة في الذاكرة عند فتح صفقة جديدة (BUY أو SELL)
+            if signal in ['BUY', 'SELL', 'BUY_REVERSE', 'SELL_REVERSE']:
+                # استخراج نوع الصفقة الأساسي (BUY أو SELL) من الإشارة
+                base_signal = 'BUY' if signal in ['BUY', 'BUY_REVERSE'] else 'SELL'
+                set_open_position(symbol, base_signal)
+                logger.info(f"💾 Saved position in memory: {symbol} = {base_signal}")
+            
+            # حذف الصفقة من الذاكرة عند إغلاق الصفقة (TP3 أو STOP_LOSS)
+            if signal in ['TP3_HIT', 'TP3', 'STOP_LOSS', 'SL']:
+                clear_open_position(symbol)
+                logger.info(f"🗑️ Removed position from memory: {symbol} (closed: {signal})")
+        
+        # ═══════════════════════════════════════════════════════════════════════════
         # Validate configuration before processing
         config_status = get_config_status()
         logger.info(f"Config status: {config_status}")
