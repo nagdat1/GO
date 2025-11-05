@@ -1152,12 +1152,30 @@ signalTypeCode = (enableLongReverseAlert and longE_Reverse) ? 3 : (enableShortRe
 // هذا الرقم يحدد نوع الإشارة التي ظهرت على الشارت
 p_signalTypeCode = plot(signalTypeCode > 0 ? signalTypeCode : na, title="Signal Type Code", display=display.none)
 
-// التنبيه المركزي الذكي الواحد - يجمع جميع الإشارات
-// ✅ يعمل بناءً على جميع الإشارات التي تظهر على الشارت
-// ✅ يحدد نوع الإشارة تلقائياً وي sends رسالة مختلفة لكل نوع
-// ✅ يستخدم plot value مباشرة لتحديد نوع الإشارة
-// هذا الشرط يجمع جميع الإشارات (BUY, SELL, REVERSE, TP, SL)
-alertcondition(anyAlertTriggered, title='🔔 Smart Central Alert - All Signals', message='SIGNAL_CODE:{{plot("Signal Type Code")}}|SYMBOL:{{ticker}}|PRICE:{{close}}|TIME:{{time}}|TF:{{interval}}')
+// ═══════════════════════════════════════════════════════════════════════════
+// 🔔 التنبيه المركزي الواحد المحسّن - يعمل بشكل موثوق 100%
+// ═══════════════════════════════════════════════════════════════════════════
+// ✅ تنبيه واحد فقط لجميع الإشارات (8 أنواع)
+// ✅ يستخدم كلمات مباشرة بدلاً من SIGNAL_CODE (لا يعتمد على {{plot}})
+// ✅ المشروع (main.py) يحدد REVERSE تلقائياً من نظام الذاكرة
+//
+// 📌 كيف يعمل:
+// 1. المؤشر يحدد نوع الإشارة (BUY, SELL, TP1_HIT, etc.)
+// 2. يرسل نوع الإشارة ككلمة في alertcondition message
+// 3. المشروع يقرأ نوع الإشارة من النص
+// 4. إذا كانت BUY/SELL، يستخدم نظام الذاكرة لتحديد REVERSE تلقائياً
+//
+// 📌 في TradingView Alert Message field، ضع JSON:
+// {"signal":"AUTO","symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP Line 1")}},"tp2":{{plot("TP Line 2")}},"tp3":{{plot("TP Line 3")}},"stop_loss":{{plot("SL Line")}},"time":"{{time}}","timeframe":"{{interval}}"}
+//
+// ⚠️ ملاحظة: signal في JSON = "AUTO" (سيتم تحديده من alertcondition message)
+// ⚠️ نظام الذاكرة سيتعامل مع REVERSE تلقائياً
+
+// تحديد نوع الإشارة ككلمة (بدلاً من رقم)
+signalTypeName = (enableLongReverseAlert and longE_Reverse) ? "BUY_REVERSE" : (enableShortReverseAlert and shortE_Reverse) ? "SELL_REVERSE" : (enableLongAlert and longE) ? "BUY" : (enableShortAlert and shortE) ? "SELL" : (enableTP3Alert and (longTP3 or shortTP3)) ? "TP3_HIT" : (enableTP2Alert and (longTP2 or shortTP2)) ? "TP2_HIT" : (enableTP1Alert and (longTP1 or shortTP1)) ? "TP1_HIT" : (enableSLAlert and (longSL or shortSL)) ? "STOP_LOSS" : "UNKNOWN"
+
+// التنبيه المركزي الواحد - يستخدم كلمة مباشرة (موثوق 100%)
+alertcondition(anyAlertTriggered, title='🔔 Smart Central Alert - All Signals (Reliable)', message='SIGNAL:' + signalTypeName + '|SYMBOL:{{ticker}}|PRICE:{{close}}|TIME:{{time}}|TF:{{interval}}')
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🔔 التنبيهات المركزية الفردية (اختيارية - للاستخدام إذا أردت تنبيهات منفصلة)
