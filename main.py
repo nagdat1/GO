@@ -519,7 +519,8 @@ def webhook(chat_id=None):
                     if '{{plot' in json_str or '{{plot_' in json_str:
                         logger.warning("⚠️ Detected TradingView plot placeholder in JSON - attempting to fix...")
                         # Try to extract signal code from text alert format (SIGNAL_CODE:...)
-                        signal_code_match = re.search(r'SIGNAL_CODE:(\d+)', raw_data_cleaned)
+                        # This happens when alertcondition message contains SIGNAL_CODE and JSON is in Message field
+                        signal_code_match = re.search(r'SIGNAL_CODE\s*:\s*(\d+)', raw_data_cleaned, re.IGNORECASE)
                         if signal_code_match:
                             signal_code = signal_code_match.group(1)
                             json_str = re.sub(r'"signal"\s*:\s*\{\{[^}]+\}\}', f'"signal":{signal_code}', json_str)
@@ -529,6 +530,13 @@ def webhook(chat_id=None):
                             # Replace {{plot_22}} or {{plot("Signal Type Code")}} with 0 (unknown) and let parsing continue
                             json_str = re.sub(r'\{\{plot[^}]+\}\}', '0', json_str)
                             logger.warning("⚠️ Replaced plot placeholder with 0 (will try to detect signal type from context)")
+                            # Also try to parse SIGNAL_CODE from the entire raw data (might be in a different format)
+                            # Check if there's SIGNAL_CODE anywhere in the message
+                            signal_code_match_full = re.search(r'SIGNAL[_\s]*CODE\s*[:=]\s*(\d+)', raw_data_cleaned, re.IGNORECASE)
+                            if signal_code_match_full:
+                                signal_code = signal_code_match_full.group(1)
+                                json_str = re.sub(r'"signal"\s*:\s*0', f'"signal":{signal_code}', json_str)
+                                logger.info(f"✅ Fixed signal field using SIGNAL_CODE found elsewhere: {signal_code}")
                     
                     try:
                         data = json.loads(json_str)
@@ -719,14 +727,36 @@ def webhook(chat_id=None):
             tp3 = data.get('tp3')
             stop_loss = data.get('stop_loss')
             
-            # If we have TP/SL values, it's likely an entry signal
-            # But we can't determine if it's BUY or SELL without more context
-            # For now, set to UNKNOWN and let the error handler deal with it
+            # If we have TP/SL values, try to determine BUY vs SELL from price relationships
             if entry_price and (tp1 or tp2 or tp3 or stop_loss):
-                logger.warning("⚠️ Detected entry signal structure but cannot determine BUY/SELL - will try to parse as BUY by default")
-                signal = 'BUY'  # Default to BUY, user can manually correct if needed
+                # For BUY: TP > Entry, SL < Entry
+                # For SELL: TP < Entry, SL > Entry
+                tp_value = tp1 or tp2 or tp3
+                if tp_value and stop_loss:
+                    if tp_value > entry_price and stop_loss < entry_price:
+                        signal = 'BUY'
+                        logger.info(f"✅ Detected BUY signal from context: TP ({tp_value}) > Entry ({entry_price}) > SL ({stop_loss})")
+                    elif tp_value < entry_price and stop_loss > entry_price:
+                        signal = 'SELL'
+                        logger.info(f"✅ Detected SELL signal from context: TP ({tp_value}) < Entry ({entry_price}) < SL ({stop_loss})")
+                    else:
+                        # Default to BUY if relationship is unclear
+                        signal = 'BUY'
+                        logger.warning(f"⚠️ Cannot determine BUY/SELL from price relationships - defaulting to BUY")
+                elif tp_value:
+                    # Only TP available, check if it's above or below entry
+                    if tp_value > entry_price:
+                        signal = 'BUY'
+                        logger.info(f"✅ Detected BUY signal from context: TP ({tp_value}) > Entry ({entry_price})")
+                    else:
+                        signal = 'SELL'
+                        logger.info(f"✅ Detected SELL signal from context: TP ({tp_value}) < Entry ({entry_price})")
+                else:
+                    # Default to BUY if we can't determine
+                    signal = 'BUY'
+                    logger.warning("⚠️ Detected entry signal structure but cannot determine BUY/SELL - defaulting to BUY")
             else:
-                logger.error("❌ Cannot determine signal type from context")
+                logger.error("❌ Cannot determine signal type from context - missing entry_price or TP/SL values")
                 signal = 'UNKNOWN'
         
         logger.info(f"Signal type: {signal}")
