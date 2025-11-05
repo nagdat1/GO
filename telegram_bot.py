@@ -124,16 +124,23 @@ def format_buy_signal(data: dict) -> str:
         stop_loss = float(stop_loss)
         
         # Calculate percentages
+        # For BUY: profit when price increases, so TP > Entry, SL < Entry
         tp1_pct = ((tp1 - entry_price) / entry_price) * 100 if entry_price > 0 else 0
         tp2_pct = ((tp2 - entry_price) / entry_price) * 100 if entry_price > 0 else 0
         tp3_pct = ((tp3 - entry_price) / entry_price) * 100 if entry_price > 0 else 0
         sl_pct = ((stop_loss - entry_price) / entry_price) * 100 if entry_price > 0 else 0
         
+        # Validate and format signs correctly
+        tp1_sign = "+" if tp1_pct >= 0 else "-"
+        tp2_sign = "+" if tp2_pct >= 0 else "-"
+        tp3_sign = "+" if tp3_pct >= 0 else "-"
+        sl_sign = "-" if sl_pct < 0 else "+"
+        
         message += f"🎯 *Take Profit Targets:*\n"
-        message += f"🎯 TP1: {format_price(tp1)} (+{tp1_pct:.2f}%)\n"
-        message += f"🎯 TP2: {format_price(tp2)} (+{tp2_pct:.2f}%)\n"
-        message += f"🎯 TP3: {format_price(tp3)} (+{tp3_pct:.2f}%)\n\n"
-        message += f"🛑 Stop Loss: {format_price(stop_loss)} ({sl_pct:.2f}%)"
+        message += f"🎯 TP1: {format_price(tp1)} ({tp1_sign}{abs(tp1_pct):.2f}%)\n"
+        message += f"🎯 TP2: {format_price(tp2)} ({tp2_sign}{abs(tp2_pct):.2f}%)\n"
+        message += f"🎯 TP3: {format_price(tp3)} ({tp3_sign}{abs(tp3_pct):.2f}%)\n\n"
+        message += f"🛑 Stop Loss: {format_price(stop_loss)} ({sl_sign}{abs(sl_pct):.2f}%)"
     else:
         # Text alert - no TP/SL data available
         if entry_price == 0:
@@ -191,17 +198,24 @@ def format_sell_signal(data: dict) -> str:
         
         # Calculate percentages (for SELL, profit when price goes down)
         # TP should be lower than entry for SELL
+        # For SELL: profit when price decreases, so TP < Entry, SL > Entry
         tp1_pct = ((entry_price - tp1) / entry_price) * 100 if entry_price > 0 else 0
         tp2_pct = ((entry_price - tp2) / entry_price) * 100 if entry_price > 0 else 0
         tp3_pct = ((entry_price - tp3) / entry_price) * 100 if entry_price > 0 else 0
         # SL is higher than entry for SELL (loss if price goes up)
         sl_pct = ((stop_loss - entry_price) / entry_price) * 100 if entry_price > 0 else 0
         
+        # Validate and format signs correctly
+        tp1_sign = "+" if tp1_pct >= 0 else "-"
+        tp2_sign = "+" if tp2_pct >= 0 else "-"
+        tp3_sign = "+" if tp3_pct >= 0 else "-"
+        sl_sign = "-" if sl_pct > 0 else "+"
+        
         message += f"🎯 *Take Profit Targets:*\n"
-        message += f"🎯 TP1: {format_price(tp1)} (+{tp1_pct:.2f}%)\n"
-        message += f"🎯 TP2: {format_price(tp2)} (+{tp2_pct:.2f}%)\n"
-        message += f"🎯 TP3: {format_price(tp3)} (+{tp3_pct:.2f}%)\n\n"
-        message += f"🛑 Stop Loss: {format_price(stop_loss)} ({sl_pct:.2f}%)"
+        message += f"🎯 TP1: {format_price(tp1)} ({tp1_sign}{abs(tp1_pct):.2f}%)\n"
+        message += f"🎯 TP2: {format_price(tp2)} ({tp2_sign}{abs(tp2_pct):.2f}%)\n"
+        message += f"🎯 TP3: {format_price(tp3)} ({tp3_sign}{abs(tp3_pct):.2f}%)\n\n"
+        message += f"🛑 Stop Loss: {format_price(stop_loss)} ({sl_sign}{abs(sl_pct):.2f}%)"
     else:
         # Text alert - no TP/SL data available
         if entry_price == 0:
@@ -259,16 +273,23 @@ def format_buy_reverse_signal(data: dict) -> str:
         stop_loss = float(stop_loss)
         
         # Calculate percentages
+        # For BUY: profit when price increases, so TP > Entry, SL < Entry
         tp1_pct = ((tp1 - entry_price) / entry_price) * 100 if entry_price > 0 else 0
         tp2_pct = ((tp2 - entry_price) / entry_price) * 100 if entry_price > 0 else 0
         tp3_pct = ((tp3 - entry_price) / entry_price) * 100 if entry_price > 0 else 0
         sl_pct = ((stop_loss - entry_price) / entry_price) * 100 if entry_price > 0 else 0
         
+        # Validate and format signs correctly
+        tp1_sign = "+" if tp1_pct >= 0 else "-"
+        tp2_sign = "+" if tp2_pct >= 0 else "-"
+        tp3_sign = "+" if tp3_pct >= 0 else "-"
+        sl_sign = "-" if sl_pct < 0 else "+"
+        
         message += f"🎯 *Take Profit Targets:*\n"
-        message += f"🎯 TP1: {format_price(tp1)} (+{tp1_pct:.2f}%)\n"
-        message += f"🎯 TP2: {format_price(tp2)} (+{tp2_pct:.2f}%)\n"
-        message += f"🎯 TP3: {format_price(tp3)} (+{tp3_pct:.2f}%)\n\n"
-        message += f"🛑 Stop Loss: {format_price(stop_loss)} ({sl_pct:.2f}%)"
+        message += f"🎯 TP1: {format_price(tp1)} ({tp1_sign}{abs(tp1_pct):.2f}%)\n"
+        message += f"🎯 TP2: {format_price(tp2)} ({tp2_sign}{abs(tp2_pct):.2f}%)\n"
+        message += f"🎯 TP3: {format_price(tp3)} ({tp3_sign}{abs(tp3_pct):.2f}%)\n\n"
+        message += f"🛑 Stop Loss: {format_price(stop_loss)} ({sl_sign}{abs(sl_pct):.2f}%)"
     else:
         # Text alert - no TP/SL data available
         if entry_price == 0:
@@ -327,17 +348,24 @@ def format_sell_reverse_signal(data: dict) -> str:
         
         # Calculate percentages (for SELL, profit when price goes down)
         # TP should be lower than entry for SELL
+        # For SELL: profit when price decreases, so TP < Entry, SL > Entry
         tp1_pct = ((entry_price - tp1) / entry_price) * 100 if entry_price > 0 else 0
         tp2_pct = ((entry_price - tp2) / entry_price) * 100 if entry_price > 0 else 0
         tp3_pct = ((entry_price - tp3) / entry_price) * 100 if entry_price > 0 else 0
         # SL is higher than entry for SELL (loss if price goes up)
         sl_pct = ((stop_loss - entry_price) / entry_price) * 100 if entry_price > 0 else 0
         
+        # Validate and format signs correctly
+        tp1_sign = "+" if tp1_pct >= 0 else "-"
+        tp2_sign = "+" if tp2_pct >= 0 else "-"
+        tp3_sign = "+" if tp3_pct >= 0 else "-"
+        sl_sign = "-" if sl_pct > 0 else "+"
+        
         message += f"🎯 *Take Profit Targets:*\n"
-        message += f"🎯 TP1: {format_price(tp1)} (+{tp1_pct:.2f}%)\n"
-        message += f"🎯 TP2: {format_price(tp2)} (+{tp2_pct:.2f}%)\n"
-        message += f"🎯 TP3: {format_price(tp3)} (+{tp3_pct:.2f}%)\n\n"
-        message += f"🛑 Stop Loss: {format_price(stop_loss)} ({sl_pct:.2f}%)"
+        message += f"🎯 TP1: {format_price(tp1)} ({tp1_sign}{abs(tp1_pct):.2f}%)\n"
+        message += f"🎯 TP2: {format_price(tp2)} ({tp2_sign}{abs(tp2_pct):.2f}%)\n"
+        message += f"🎯 TP3: {format_price(tp3)} ({tp3_sign}{abs(tp3_pct):.2f}%)\n\n"
+        message += f"🛑 Stop Loss: {format_price(stop_loss)} ({sl_sign}{abs(sl_pct):.2f}%)"
     else:
         # Text alert - no TP/SL data available
         if entry_price == 0:
