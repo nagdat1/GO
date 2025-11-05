@@ -40,7 +40,7 @@ def format_price(price: float) -> str:
 
 def send_message(message: str, chat_id: str = None) -> bool:
     """إرسال رسالة إلى Telegram مع rate limiting لتجنب spam"""
-    global _last_message_time
+    global _last_message_time, _min_delay_between_messages
     
     try:
         target_chat_id = chat_id or TELEGRAM_CHAT_ID
@@ -88,7 +88,6 @@ def send_message(message: str, chat_id: str = None) -> bool:
                     logger.error("❌ المشكلة: إرسال رسائل كثيرة جداً (Rate Limit)!")
                     logger.error("💡 الحل: البوت سيقلل من سرعة الإرسال تلقائياً")
                     # زيادة التأخير مؤقتاً
-                    global _min_delay_between_messages
                     _min_delay_between_messages = min(_min_delay_between_messages * 2, 2.0)  # حد أقصى 2 ثانية
                 return False
         else:
