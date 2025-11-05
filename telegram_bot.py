@@ -4,11 +4,16 @@ Telegram Bot Module - نسخة مبسطة مع رسائل بالعربية
 import requests
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 import logging
+import time
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+
+# Rate limiting: آخر وقت إرسال رسالة (لتجنب spam)
+_last_message_time = 0
+_min_delay_between_messages = 0.5  # 500ms بين كل رسالة (لتجنب spam detection)
 
 def escape_html(text: str) -> str:
     """تهريب الأحرف الخاصة في HTML"""
@@ -34,12 +39,22 @@ def format_price(price: float) -> str:
         return f"{price:.8f}".rstrip('0').rstrip('.')
 
 def send_message(message: str, chat_id: str = None) -> bool:
-    """إرسال رسالة إلى Telegram"""
+    """إرسال رسالة إلى Telegram مع rate limiting لتجنب spam"""
+    global _last_message_time
+    
     try:
         target_chat_id = chat_id or TELEGRAM_CHAT_ID
         if not target_chat_id:
             logger.error("❌ No chat ID provided - يجب تحديد Chat ID")
             return False
+        
+        # Rate limiting: تأخير بسيط بين الرسائل لتجنب spam detection
+        current_time = time.time()
+        time_since_last_message = current_time - _last_message_time
+        if time_since_last_message < _min_delay_between_messages:
+            sleep_time = _min_delay_between_messages - time_since_last_message
+            time.sleep(sleep_time)
+        _last_message_time = time.time()
         
         # تحويل chat_id إلى string (للمجموعات قد يكون سالباً)
         chat_id_str = str(target_chat_id)
@@ -68,6 +83,13 @@ def send_message(message: str, chat_id: str = None) -> bool:
                 elif 'bot was blocked' in error_description.lower() or 'kicked' in error_description.lower():
                     logger.error("❌ المشكلة: البوت تم طرده من المجموعة!")
                     logger.error("💡 الحل: أضف البوت إلى المجموعة مرة أخرى من إعدادات المجموعة")
+                    logger.error("💡 لمنع الطرد: تأكد من أن البوت لديه صلاحية 'Send Messages' في إعدادات المجموعة")
+                elif 'too many requests' in error_description.lower() or 'flood' in error_description.lower():
+                    logger.error("❌ المشكلة: إرسال رسائل كثيرة جداً (Rate Limit)!")
+                    logger.error("💡 الحل: البوت سيقلل من سرعة الإرسال تلقائياً")
+                    # زيادة التأخير مؤقتاً
+                    global _min_delay_between_messages
+                    _min_delay_between_messages = min(_min_delay_between_messages * 2, 2.0)  # حد أقصى 2 ثانية
                 return False
         else:
             logger.error(f"❌ HTTP Error {response.status_code}: {response.text}")

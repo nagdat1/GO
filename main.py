@@ -43,6 +43,17 @@ def get_message_key(data: dict) -> str:
 def is_recent_duplicate(message_key: str) -> bool:
     """Check if message was sent recently (within last 5 minutes)"""
     current_time = datetime.now()
+    
+    # تنظيف الرسائل القديمة (أكثر من 10 دقائق) لتوفير الذاكرة
+    keys_to_remove = []
+    for key, sent_time in recent_messages.items():
+        time_diff = (current_time - sent_time).total_seconds()
+        if time_diff > 600:  # 10 minutes
+            keys_to_remove.append(key)
+    for key in keys_to_remove:
+        del recent_messages[key]
+    
+    # التحقق من التكرار
     if message_key in recent_messages:
         last_sent = recent_messages[message_key]
         time_diff = (current_time - last_sent).total_seconds()
