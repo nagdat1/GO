@@ -515,28 +515,44 @@ def webhook(chat_id=None):
                     # Fix: Replace TradingView plot placeholders with actual values or extract them
                     # Handle cases where {{plot_22}} or {{plot("Signal Type Code")}} weren't replaced
                     import re
+                    # ═══════════════════════════════════════════════════════════════════════
+                    # 🔍 محاولة استخراج SIGNAL_CODE من alertcondition message
+                    # ═══════════════════════════════════════════════════════════════════════
+                    # عندما يكون alertcondition message يحتوي على SIGNAL_CODE والـ JSON في Message field
+                    # يجب استخراج SIGNAL_CODE من النص قبل JSON
+                    signal_code_from_alert = None
+                    
+                    # البحث عن SIGNAL_CODE في الرسالة (قبل أو بعد JSON)
+                    # Pattern 1: SIGNAL_CODE:1|SYMBOL:... (format من alertcondition message)
+                    signal_code_match = re.search(r'SIGNAL_CODE\s*:\s*(\d+)', raw_data_cleaned, re.IGNORECASE)
+                    if signal_code_match:
+                        signal_code_from_alert = signal_code_match.group(1)
+                        logger.info(f"✅ Found SIGNAL_CODE in alertcondition message: {signal_code_from_alert}")
+                    
+                    # Pattern 2: SIGNAL_CODE=1 أو SIGNAL_CODE = 1
+                    if not signal_code_from_alert:
+                        signal_code_match2 = re.search(r'SIGNAL[_\s]*CODE\s*[:=]\s*(\d+)', raw_data_cleaned, re.IGNORECASE)
+                        if signal_code_match2:
+                            signal_code_from_alert = signal_code_match2.group(1)
+                            logger.info(f"✅ Found SIGNAL_CODE in alternative format: {signal_code_from_alert}")
+                    
                     # Check if signal field contains plot placeholder
                     if '{{plot' in json_str or '{{plot_' in json_str:
                         logger.warning("⚠️ Detected TradingView plot placeholder in JSON - attempting to fix...")
-                        # Try to extract signal code from text alert format (SIGNAL_CODE:...)
-                        # This happens when alertcondition message contains SIGNAL_CODE and JSON is in Message field
-                        signal_code_match = re.search(r'SIGNAL_CODE\s*:\s*(\d+)', raw_data_cleaned, re.IGNORECASE)
-                        if signal_code_match:
-                            signal_code = signal_code_match.group(1)
-                            json_str = re.sub(r'"signal"\s*:\s*\{\{[^}]+\}\}', f'"signal":{signal_code}', json_str)
-                            logger.info(f"✅ Fixed signal field using SIGNAL_CODE from text: {signal_code}")
+                        
+                        if signal_code_from_alert:
+                            # استبدال {{plot_...}} بـ SIGNAL_CODE الموجود في alertcondition message
+                            json_str = re.sub(r'"signal"\s*:\s*\{\{[^}]+\}\}', f'"signal":{signal_code_from_alert}', json_str)
+                            logger.info(f"✅ Fixed signal field using SIGNAL_CODE from alertcondition message: {signal_code_from_alert}")
                         else:
-                            # Try to extract from plot name (plot_22 means it's the 22nd plot, which might be Signal Type Code)
-                            # Replace {{plot_22}} or {{plot("Signal Type Code")}} with 0 (unknown) and let parsing continue
+                            # إذا لم يوجد SIGNAL_CODE، استبدل بـ 0 (unknown)
                             json_str = re.sub(r'\{\{plot[^}]+\}\}', '0', json_str)
-                            logger.warning("⚠️ Replaced plot placeholder with 0 (will try to detect signal type from context)")
-                            # Also try to parse SIGNAL_CODE from the entire raw data (might be in a different format)
-                            # Check if there's SIGNAL_CODE anywhere in the message
-                            signal_code_match_full = re.search(r'SIGNAL[_\s]*CODE\s*[:=]\s*(\d+)', raw_data_cleaned, re.IGNORECASE)
-                            if signal_code_match_full:
-                                signal_code = signal_code_match_full.group(1)
-                                json_str = re.sub(r'"signal"\s*:\s*0', f'"signal":{signal_code}', json_str)
-                                logger.info(f"✅ Fixed signal field using SIGNAL_CODE found elsewhere: {signal_code}")
+                            logger.warning("⚠️ Replaced plot placeholder with 0 (SIGNAL_CODE not found in message)")
+                    
+                    # أيضاً: إذا كان signal = 0 في JSON الموجود، حاول استبداله بـ SIGNAL_CODE
+                    if signal_code_from_alert and '"signal":0' in json_str:
+                        json_str = re.sub(r'"signal"\s*:\s*0', f'"signal":{signal_code_from_alert}', json_str)
+                        logger.info(f"✅ Fixed signal=0 using SIGNAL_CODE from alertcondition message: {signal_code_from_alert}")
                     
                     try:
                         data = json.loads(json_str)
