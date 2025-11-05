@@ -64,8 +64,10 @@ def send_message(message: str, chat_id: str = None) -> bool:
                 logger.error(f"❌ Telegram API error: {error_description}")
                 if 'chat not found' in error_description.lower():
                     logger.error("❌ المشكلة: Chat ID غير صحيح أو البوت غير عضو في المجموعة!")
-                elif 'bot was blocked' in error_description.lower():
-                    logger.error("❌ المشكلة: البوت محظور من المجموعة!")
+                    logger.error("💡 الحل: أضف البوت إلى المجموعة مرة أخرى")
+                elif 'bot was blocked' in error_description.lower() or 'kicked' in error_description.lower():
+                    logger.error("❌ المشكلة: البوت تم طرده من المجموعة!")
+                    logger.error("💡 الحل: أضف البوت إلى المجموعة مرة أخرى من إعدادات المجموعة")
                 return False
         else:
             logger.error(f"❌ HTTP Error {response.status_code}: {response.text}")

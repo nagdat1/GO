@@ -85,13 +85,42 @@ def webhook(chat_id=None):
                 data = request.get_json(force=False)
             else:
                 raw_data = request.get_data(as_text=True)
+                logger.info(f"📥 Raw data received: {raw_data[:200]}...")  # Log first 200 chars
+                
                 if raw_data:
-                    data = json.loads(raw_data)
+                    # Try to extract JSON from raw data (in case there's extra text)
+                    # Look for JSON object starting with {
+                    start_idx = raw_data.find('{')
+                    if start_idx != -1:
+                        # Find matching closing brace
+                        brace_count = 0
+                        end_idx = start_idx
+                        for i in range(start_idx, len(raw_data)):
+                            if raw_data[i] == '{':
+                                brace_count += 1
+                            elif raw_data[i] == '}':
+                                brace_count -= 1
+                                if brace_count == 0:
+                                    end_idx = i + 1
+                                    break
+                        
+                        json_str = raw_data[start_idx:end_idx]
+                        logger.info(f"📥 Extracted JSON: {json_str[:200]}...")
+                        data = json.loads(json_str)
+                    else:
+                        # Try parsing the whole thing
+                        data = json.loads(raw_data)
+        except json.JSONDecodeError as e:
+            logger.error(f"❌ Error parsing JSON: {e}")
+            logger.error(f"❌ Raw data: {request.get_data(as_text=True)[:500]}")
+            return jsonify({"error": f"Invalid JSON: {str(e)}"}), 400
         except Exception as e:
-            logger.error(f"Error parsing JSON: {e}")
-            return jsonify({"error": "Invalid JSON"}), 400
+            logger.error(f"❌ Unexpected error parsing data: {e}")
+            logger.error(f"❌ Raw data: {request.get_data(as_text=True)[:500]}")
+            return jsonify({"error": f"Error processing request: {str(e)}"}), 400
         
         if not data or not isinstance(data, dict):
+            logger.error(f"❌ Invalid data format: {type(data)} - {data}")
             return jsonify({"error": "No valid data received"}), 400
         
         # Get signal type (required)
