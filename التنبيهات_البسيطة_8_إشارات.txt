@@ -17,7 +17,7 @@ Condition: 🟢 LONG Signal
 Message (JSON):
 ────────────────────────────────────────────────────────────────────────────
 
-{"signal":"BUY","symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP Line 1")}},"tp2":{{plot("TP Line 2")}},"tp3":{{plot("TP Line 3")}},"stop_loss":{{plot("SL Line")}},"time":"{{time}}","timeframe":"{{interval}}"}
+{"signal":"BUY","symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP1 Alert")}},"tp2":{{plot("TP2 Alert")}},"tp3":{{plot("TP3 Alert")}},"stop_loss":{{plot("SL Alert")}},"time":"{{time}}","timeframe":"{{interval}}"}
 
 ═══════════════════════════════════════════════════════════════════════════
 📌 التنبيه 2: صفقة شورت (SELL)
@@ -30,7 +30,7 @@ Condition: 🔴 SHORT Signal
 Message (JSON):
 ────────────────────────────────────────────────────────────────────────────
 
-{"signal":"SELL","symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP Line 1")}},"tp2":{{plot("TP Line 2")}},"tp3":{{plot("TP Line 3")}},"stop_loss":{{plot("SL Line")}},"time":"{{time}}","timeframe":"{{interval}}"}
+{"signal":"SELL","symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP1 Alert")}},"tp2":{{plot("TP2 Alert")}},"tp3":{{plot("TP3 Alert")}},"stop_loss":{{plot("SL Alert")}},"time":"{{time}}","timeframe":"{{interval}}"}
 
 ═══════════════════════════════════════════════════════════════════════════
 📌 التنبيه 3: صفقة لونج عكسي (BUY_REVERSE)
@@ -43,7 +43,7 @@ Condition: 🟠 LONG REVERSE Signal
 Message (JSON):
 ────────────────────────────────────────────────────────────────────────────
 
-{"signal":"BUY_REVERSE","symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP Line 1")}},"tp2":{{plot("TP Line 2")}},"tp3":{{plot("TP Line 3")}},"stop_loss":{{plot("SL Line")}},"time":"{{time}}","timeframe":"{{interval}}"}
+{"signal":"BUY_REVERSE","symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP1 Alert")}},"tp2":{{plot("TP2 Alert")}},"tp3":{{plot("TP3 Alert")}},"stop_loss":{{plot("SL Alert")}},"time":"{{time}}","timeframe":"{{interval}}"}
 
 ═══════════════════════════════════════════════════════════════════════════
 📌 التنبيه 4: صفقة شورت عكسي (SELL_REVERSE)
@@ -56,7 +56,7 @@ Condition: 🟠 SHORT REVERSE Signal
 Message (JSON):
 ────────────────────────────────────────────────────────────────────────────
 
-{"signal":"SELL_REVERSE","symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP Line 1")}},"tp2":{{plot("TP Line 2")}},"tp3":{{plot("TP Line 3")}},"stop_loss":{{plot("SL Line")}},"time":"{{time}}","timeframe":"{{interval}}"}
+{"signal":"SELL_REVERSE","symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP1 Alert")}},"tp2":{{plot("TP2 Alert")}},"tp3":{{plot("TP3 Alert")}},"stop_loss":{{plot("SL Alert")}},"time":"{{time}}","timeframe":"{{interval}}"}
 
 ═══════════════════════════════════════════════════════════════════════════
 📌 التنبيه 5: ضرب الهدف الأول (TP1_HIT)
@@ -140,6 +140,22 @@ Message (JSON):
 5. ✅ الرسائل بالعربية وبسيطة وواضحة
 6. ✅ تم إصلاح مشكلة Markdown - جميع الرسائل تعمل بشكل صحيح
 7. ✅ جميع الرسائل تُرسل إلى نفس Chat ID (المجموعة)
+
+═══════════════════════════════════════════════════════════════════════════
+🔧 إصلاح مشكلة TP/SL غير متاحة:
+═══════════════════════════════════════════════════════════════════════════
+
+✅ تم إصلاح مشكلة "TP/SL غير متاحة" في إشارات الدخول
+✅ الآن يتم استخدام أسماء Plots جديدة:
+   • "TP1 Alert" بدلاً من "TP Line 1"
+   • "TP2 Alert" بدلاً من "TP Line 2"
+   • "TP3 Alert" بدلاً من "TP Line 3"
+   • "SL Alert" بدلاً من "SL Line"
+
+✅ هذه Plots تُحسب مباشرة عند إشارة الدخول لضمان توفرها في التنبيهات
+✅ لا حاجة لتحديث التنبيهات - الأسماء الجديدة تعمل تلقائياً
+
+⚠️ مهم: تأكد من نسخ JSON المحدث من هذا الملف عند إنشاء التنبيهات الجديدة
 
 ═══════════════════════════════════════════════════════════════════════════
 
