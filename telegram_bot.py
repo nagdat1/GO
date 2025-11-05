@@ -218,6 +218,142 @@ def format_sell_signal(data: dict) -> str:
     return message
 
 
+def format_buy_reverse_signal(data: dict) -> str:
+    """
+    Format BUY REVERSE signal message (position reversed from Short to Long)
+    
+    Args:
+        data: Dictionary containing signal data
+        
+    Returns:
+        str: Formatted message
+    """
+    symbol = data.get('symbol', 'N/A')
+    entry_price = float(data.get('entry_price', 0))
+    tp1 = data.get('tp1')
+    tp2 = data.get('tp2')
+    tp3 = data.get('tp3')
+    stop_loss = data.get('stop_loss')
+    time = data.get('time', 'N/A')
+    timeframe = data.get('timeframe', 'N/A')
+    
+    message = f"🟠🔄🟠 *BUY REVERSE SIGNAL* 🟠🔄🟠\n"
+    message += f"⚠️ *Position Reversed (Short → Long)*\n\n"
+    message += f"📊 Symbol: {symbol}\n"
+    
+    # Check if price is valid (not 0, which means Position Size was extracted instead of Price)
+    if entry_price == 0:
+        message += f"⚠️ *Entry Price: NOT AVAILABLE*\n"
+        message += f"❌ Text alert contains Position Size instead of Price!\n\n"
+    else:
+        message += f"💰 Entry Price: {format_price(entry_price)}\n"
+    
+    message += f"⏰ Time: {time}\n"
+    message += f"📈 Timeframe: {timeframe}\n\n"
+    
+    # Only show TP/SL if they exist (from JSON data, not estimated)
+    if tp1 is not None and tp2 is not None and tp3 is not None and stop_loss is not None:
+        tp1 = float(tp1)
+        tp2 = float(tp2)
+        tp3 = float(tp3)
+        stop_loss = float(stop_loss)
+        
+        # Calculate percentages
+        tp1_pct = ((tp1 - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+        tp2_pct = ((tp2 - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+        tp3_pct = ((tp3 - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+        sl_pct = ((stop_loss - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+        
+        message += f"🎯 *Take Profit Targets:*\n"
+        message += f"🎯 TP1: {format_price(tp1)} (+{tp1_pct:.2f}%)\n"
+        message += f"🎯 TP2: {format_price(tp2)} (+{tp2_pct:.2f}%)\n"
+        message += f"🎯 TP3: {format_price(tp3)} (+{tp3_pct:.2f}%)\n\n"
+        message += f"🛑 Stop Loss: {format_price(stop_loss)} ({sl_pct:.2f}%)"
+    else:
+        # Text alert - no TP/SL data available
+        if entry_price == 0:
+            message += f"⚠️ *ERROR:* Real price not available!\n"
+            message += f"📌 Text alert contains Position Size instead of Price.\n"
+            message += f"📌 Position Size: حجم المركز (Volume) ❌\n"
+            message += f"📌 Price: سعر العملة الحقيقي ✅\n\n"
+            message += f"✅ *SOLUTION:* Use JSON format in TradingView Alert Message field.\n"
+            message += f"📖 See README.md for instructions."
+        else:
+            message += f"⚠️ *Note:* TP/SL data not available from text alert.\n"
+            message += f"Please use JSON format in TradingView Alert for complete data."
+    
+    return message
+
+
+def format_sell_reverse_signal(data: dict) -> str:
+    """
+    Format SELL REVERSE signal message (position reversed from Long to Short)
+    
+    Args:
+        data: Dictionary containing signal data
+        
+    Returns:
+        str: Formatted message
+    """
+    symbol = data.get('symbol', 'N/A')
+    entry_price = float(data.get('entry_price', 0))
+    tp1 = data.get('tp1')
+    tp2 = data.get('tp2')
+    tp3 = data.get('tp3')
+    stop_loss = data.get('stop_loss')
+    time = data.get('time', 'N/A')
+    timeframe = data.get('timeframe', 'N/A')
+    
+    message = f"🟠🔄🟠 *SELL REVERSE SIGNAL* 🟠🔄🟠\n"
+    message += f"⚠️ *Position Reversed (Long → Short)*\n\n"
+    message += f"📊 Symbol: {symbol}\n"
+    
+    # Check if price is valid (not 0, which means Position Size was extracted instead of Price)
+    if entry_price == 0:
+        message += f"⚠️ *Entry Price: NOT AVAILABLE*\n"
+        message += f"❌ Text alert contains Position Size instead of Price!\n\n"
+    else:
+        message += f"💰 Entry Price: {format_price(entry_price)}\n"
+    
+    message += f"⏰ Time: {time}\n"
+    message += f"📈 Timeframe: {timeframe}\n\n"
+    
+    # Only show TP/SL if they exist (from JSON data, not estimated)
+    if tp1 is not None and tp2 is not None and tp3 is not None and stop_loss is not None:
+        tp1 = float(tp1)
+        tp2 = float(tp2)
+        tp3 = float(tp3)
+        stop_loss = float(stop_loss)
+        
+        # Calculate percentages (for SELL, profit when price goes down)
+        # TP should be lower than entry for SELL
+        tp1_pct = ((entry_price - tp1) / entry_price) * 100 if entry_price > 0 else 0
+        tp2_pct = ((entry_price - tp2) / entry_price) * 100 if entry_price > 0 else 0
+        tp3_pct = ((entry_price - tp3) / entry_price) * 100 if entry_price > 0 else 0
+        # SL is higher than entry for SELL (loss if price goes up)
+        sl_pct = ((stop_loss - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+        
+        message += f"🎯 *Take Profit Targets:*\n"
+        message += f"🎯 TP1: {format_price(tp1)} (+{tp1_pct:.2f}%)\n"
+        message += f"🎯 TP2: {format_price(tp2)} (+{tp2_pct:.2f}%)\n"
+        message += f"🎯 TP3: {format_price(tp3)} (+{tp3_pct:.2f}%)\n\n"
+        message += f"🛑 Stop Loss: {format_price(stop_loss)} ({sl_pct:.2f}%)"
+    else:
+        # Text alert - no TP/SL data available
+        if entry_price == 0:
+            message += f"⚠️ *ERROR:* Real price not available!\n"
+            message += f"📌 Text alert contains Position Size instead of Price.\n"
+            message += f"📌 Position Size: حجم المركز (Volume) ❌\n"
+            message += f"📌 Price: سعر العملة الحقيقي ✅\n\n"
+            message += f"✅ *SOLUTION:* Use JSON format in TradingView Alert Message field.\n"
+            message += f"📖 See README.md for instructions."
+        else:
+            message += f"⚠️ *Note:* TP/SL data not available from text alert.\n"
+            message += f"Please use JSON format in TradingView Alert for complete data."
+    
+    return message
+
+
 def format_tp1_hit(data: dict) -> str:
     """Format TP1 target hit message"""
     symbol = data.get('symbol', 'N/A')

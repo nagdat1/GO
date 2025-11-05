@@ -7,6 +7,8 @@ from telegram_bot import (
     send_message,
     format_buy_signal,
     format_sell_signal,
+    format_buy_reverse_signal,
+    format_sell_reverse_signal,
     format_tp1_hit,
     format_tp2_hit,
     format_tp3_hit,
@@ -591,6 +593,10 @@ def webhook(chat_id=None):
             message = format_buy_signal(data)
         elif signal == 'SELL':
             message = format_sell_signal(data)
+        elif signal == 'BUY_REVERSE' or signal == 'LONG_REVERSE':
+            message = format_buy_reverse_signal(data)
+        elif signal == 'SELL_REVERSE' or signal == 'SHORT_REVERSE':
+            message = format_sell_reverse_signal(data)
         elif signal == 'TP1_HIT' or signal == 'TP1':
             message = format_tp1_hit(data)
         elif signal == 'TP2_HIT' or signal == 'TP2':

@@ -5,20 +5,11 @@
 //
 VERSION                   = 'v13'// 2024.3.20
 
-strategy(
+indicator(
   'nagdat',
   shorttitle              = 'nagdat ' + VERSION,
   overlay                 = true,
-  explicit_plot_zorder    = true,
-  pyramiding              = 0,
-  default_qty_type        = strategy.percent_of_equity,
-  default_qty_value       = 50,
-  calc_on_every_tick      = false,
-  process_orders_on_close = true,
-  max_bars_back           = 5000,
-  initial_capital         = 5000,
-  commission_type         = strategy.commission.percent,
-  commission_value        = 0.02
+  max_bars_back           = 5000
   )
 
 //Truncate Function
@@ -77,13 +68,26 @@ my_time = str.tostring(f_resInMinutes()*tfmult)
 useSource = close //input.string('Close',   'What Source to be used?', options = ['Close', 'HL2'])
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 📅 إعدادات فترة الباك تيست - Backtesting Date Range Settings
+// 📅 إعدادات فلتر التاريخ - Date Filter Settings
 // ═══════════════════════════════════════════════════════════════════════════
-enableFilter = input.bool(true,  "تفعيل تحديد فترة الباك تيست", group="📅 فترة الباك تيست (Backtesting Date Range)", tooltip="فعّل هذا الخيار لتحديد فترة معينة للباك تيست")
-fromDate     = input.time(timestamp("01 Jan 2023 00:00 +0300"), "تاريخ البداية (Start Date)", group="📅 فترة الباك تيست (Backtesting Date Range)", tooltip="تاريخ بداية الباك تيست")
-toDate       = input.time(timestamp("31 Dec 2099 00:00 +0300"), "تاريخ النهاية (End Date)", group="📅 فترة الباك تيست (Backtesting Date Range)", tooltip="تاريخ نهاية الباك تيست")
+// خيار التاريخ التلقائي (قبل شهر) - مفعّل افتراضياً
+useAutoStartDate = input.bool(false, "🔄 تفعيل فلتر التاريخ", group="📅 فلتر التاريخ (Date Filter)", tooltip="عند التفعيل، سيتم عرض الإشارات فقط ضمن الفترة المحددة")
+
+// حساب تاريخ البدء التلقائي (قبل شهر من الآن)
+oneMonthInMillis = 30 * 24 * 60 * 60 * 1000  // تقريباً 30 يوم بالميلي ثانية
+autoStartDate = timenow - oneMonthInMillis
+
+// التاريخ اليدوي الأصلي
+manualStartDate = input.time(timestamp("01 Jan 2023 00:00 +0300"), "📅 تاريخ البداية اليدوي", group="📅 فلتر التاريخ (Date Filter)", tooltip="تاريخ بداية الفلتر (يُستخدم فقط عند تفعيل فلتر التاريخ)")
+
+// اختيار التاريخ المناسب حسب الخيار المفعل
+fromDate = useAutoStartDate ? autoStartDate : manualStartDate
+
+toDate = input.time(timestamp("31 Dec 2099 00:00 +0300"), "📅 تاريخ النهاية", group="📅 فلتر التاريخ (Date Filter)", tooltip="تاريخ نهاية الفلتر")
 
 // التحقق من أن التاريخ الحالي ضمن الفترة المحددة
+// عند استخدام التاريخ التلقائي، يتم تطبيق الفلتر تلقائياً
+enableFilter = useAutoStartDate
 tradeDateIsAllowed = not enableFilter or (time >= fromDate and time <= toDate)
 
 filter1 = 'Filter with Atr'
@@ -248,35 +252,18 @@ plotshape(wasShort, color = color.yellow)
 //plotshape(almaRibbon ? buy : na,  title = "Buy",  text = 'Buy',  style = shape.labelup,   location = location.belowbar, color= #39ff14, textcolor = #FFFFFF, size = size.tiny)
 //plotshape(almaRibbon ? sell : na, title = "Exit", text = 'Exit', style = shape.labeldown, location = location.abovebar, color= #ff1100, textcolor = #FFFFFF, size = size.tiny)
 
-// === STRATEGY ===
-// Entries and Exits with TP/SL
+// تتبع عدد إشارات الشراء والبيع (للمؤشر فقط - لا تتبع صفقات فعلية)
+var int longSignalsCount = 0
+var int shortSignalsCount = 0
 
-//tradeType - Trailing Mode
-// Only close existing position if it exists, then open new one
-if buySignal and TPSType == "Trailing" and tradeDateIsAllowed
-    // Close Short position if exists
-    if strategy.position_size < 0
-        strategy.close("Short")
-    // Open Long position
-    if strategy.position_size <= 0
-        strategy.entry("Long" , strategy.long)
+// تتبع الإشارات
+if buySignal
+    longSignalsCount := longSignalsCount + 1
+if sellSignal
+    shortSignalsCount := shortSignalsCount + 1
 
-if sellSignal and TPSType == "Trailing" and tradeDateIsAllowed
-    // Close Long position if exists
-    if strategy.position_size > 0
-        strategy.close("Long")
-    // Open Short position
-    if strategy.position_size >= 0
-        strategy.entry("Short" , strategy.short)
-
-//tradeType - Options Mode
-if buySignal and TPSType == "Options" and tradeDateIsAllowed
-    if strategy.position_size <= 0
-        strategy.entry("Long" , strategy.long)    
-
-if sellSignal and TPSType == "Options" and tradeDateIsAllowed
-    if strategy.position_size > 0
-        strategy.close("Long")
+// === INDICATOR ===
+// إشارات الدخول والخروج (للمؤشر فقط - لا توجد صفقات فعلية)
 
 
 G_RISK       = '■ ' + 'Risk Management'
@@ -341,17 +328,9 @@ i_alertOn    = true //input.bool       (true,      'Alert Labels On/Off'        
 i_barColOn   = true //input.bool       (true,      'Bar Color On/Off'             , group = G_DISPLAY)
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 🔔 إعدادات رسائل التنبيهات - Alert Messages Settings
+// 🔔 رسائل التنبيهات الجاهزة - Ready Alert Messages (Telegram)
 // ═══════════════════════════════════════════════════════════════════════════
-G_ALERTS_MSG = '■ ' + 'Alert Messages (Webhook)'
-// المتغيرات: {{ticker}} سيتم استبدالها برمز السهم، {{percentage}} للـ TP
-i_msgBuy     = input.string('{"signal": "buy", "symbol": "{{ticker}}", "id": "STRATEGY_001"}', title='🟢 رسالة الشراء (Long Entry)', group=G_ALERTS_MSG)
-i_msgSell    = input.string('{"signal": "sell", "symbol": "{{ticker}}", "id": "STRATEGY_001"}', title='🔴 رسالة البيع (Short Entry)', group=G_ALERTS_MSG)
-i_msgTP1     = input.string('{"signal": "partial_close", "symbol": "{{ticker}}", "percentage": 50, "id": "STRATEGY_001"}', title='🎯 رسالة TP1', group=G_ALERTS_MSG)
-i_msgTP2     = input.string('{"signal": "partial_close", "symbol": "{{ticker}}", "percentage": 30, "id": "STRATEGY_001"}', title='🎯 رسالة TP2', group=G_ALERTS_MSG)
-i_msgTP3     = input.string('{"signal": "partial_close", "symbol": "{{ticker}}", "percentage": 20, "id": "STRATEGY_001"}', title='🎯 رسالة TP3', group=G_ALERTS_MSG)
-i_msgSL      = input.string('{"signal": "close", "symbol": "{{ticker}}", "id": "STRATEGY_001"}', title='🛑 رسالة Stop Loss', group=G_ALERTS_MSG)
-i_msgClose   = input.string('{"signal": "close", "symbol": "{{ticker}}", "id": "STRATEGY_001"}', title='⚪ رسالة الإغلاق (Close)', group=G_ALERTS_MSG)
+// الرسائل جاهزة ومكتملة - يمكنك تعديلها هنا مباشرة في الكود
 
 // ——————————— <function_declarations>
 // @function        Calculate the Take Profit line, and the crossover or crossunder
@@ -410,8 +389,32 @@ switch
     lxTrigger and condition[1] >=  1.0 => condition :=  0.0
     sxTrigger and condition[1] <= -1.0 => condition :=  0.0
 
-longE        = leTrigger and condition[1] <=  0.0 and condition ==  1.0
-shortE       = seTrigger and condition[1] >=  0.0 and condition == -1.0
+// ═══════════════════════════════════════════════════════════════════════════
+// 🔄 إشارات العكس (REVERSE) - عندما تعكس الصفقة قبل الوصول لـ TP3 أو SL
+// ═══════════════════════════════════════════════════════════════════════════
+// عندما يكون TPSType == "Trailing"، إذا كانت هناك صفقة مفتوحة وجاءت إشارة عكسية
+// يتم إغلاق الصفقة الحالية وفتح صفقة عكسية (كما في الاستراتيجية)
+// هذه الإشارات تسمى REVERSE لتتميز عن الإشارات العادية
+//
+// منطق العكس (كما في الاستراتيجية):
+// - إذا كان هناك Short مفتوح (condition[1] < 0) وجاء buySignal → إغلاق Short + فتح Long (REVERSE)
+// - إذا كان هناك Long مفتوح (condition[1] > 0) وجاء sellSignal → إغلاق Long + فتح Short (REVERSE)
+
+// إشارة Long عكسية: عندما تأتي إشارة Buy أثناء وجود صفقة Short مفتوحة
+// هذا يعني: Close Short + Open Long في نفس الوقت
+longE_Reverse = leTrigger and condition[1] < 0.0 and condition == 1.0 and TPSType == "Trailing"
+
+// إشارة Short عكسية: عندما تأتي إشارة Sell أثناء وجود صفقة Long مفتوحة
+// هذا يعني: Close Long + Open Short في نفس الوقت
+shortE_Reverse = seTrigger and condition[1] > 0.0 and condition == -1.0 and TPSType == "Trailing"
+
+// ملاحظة: عندما يحدث العكس، لا توجد إشارة Close منفصلة
+// لأن الإغلاق والفتح يحدثان في نفس الوقت (في إشارة REVERSE واحدة)
+
+// الإشارات العادية: تحدث فقط عندما لا توجد صفقة مفتوحة (condition[1] == 0.0)
+// وليس هناك إشارة عكسية في نفس الوقت
+longE        = leTrigger and condition[1] ==  0.0 and condition ==  1.0 and not longE_Reverse
+shortE       = seTrigger and condition[1] ==  0.0 and condition == -1.0 and not shortE_Reverse
 longX        = lxTrigger and condition[1] >=  1.0 and condition ==  0.0
 shortX       = sxTrigger and condition[1] <= -1.0 and condition ==  0.0
 longSL       = slLong    and condition[1] >=  1.0 and condition ==  0.0
@@ -424,81 +427,10 @@ longTP1      = tp1Long   and condition[1] ==  1.0 and condition ==  1.1
 shortTP1     = tp1Short  and condition[1] == -1.0 and condition == -1.1
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ⚠️ ملاحظة مهمة: alertcondition() لا تعمل مع strategy() في Pine Script
+// 🔔 ALERT CONDITIONS - شروط التنبيهات
 // ═══════════════════════════════════════════════════════════════════════════
-// للحصول على شروط منفصلة في Create Alert:
-// 1. استخدم ملف "ALGOX_Alerts.pine" المنفصل (indicator)
-// 2. أضف المؤشر مع الاستراتيجية على نفس الرسم البياني
-// 3. أنشئ التنبيهات من المؤشر "ALGOX Alerts" وليس من الاستراتيجية
-// 4. تأكد من تطابق الإعدادات بين الاستراتيجية والمؤشر
-
-// ——————————— <strategy_calls> {
-//<long orders>
-if strategy.position_size <= 0 and longE and TPSType == "ATR" and tradeDateIsAllowed
-    strategy.entry('Long', strategy.long, comment = 'LE')
-    // 🟢 تنبيه إشارة الشراء
-    msgBuy = str.replace(i_msgBuy, "{{ticker}}", syminfo.ticker)
-    alert(msgBuy, alert.freq_once_per_bar_close)
-if strategy.position_size > 0 and condition ==  1.0 and TPSType == "ATR" and tradeDateIsAllowed
-    strategy.exit(id = 'LXTP1', from_entry = 'Long', qty_percent = i_lxQtyTP1, limit = tp1Line, stop = slLine, comment_profit = 'LXTP1', comment_loss = 'SL')
-    // 🎯 تنبيه الوصول للهدف الأول (TP1)
-    if longTP1
-        msgTP1 = str.replace(i_msgTP1, "{{ticker}}", syminfo.ticker)
-        alert(msgTP1, alert.freq_once_per_bar_close)
-    // 🛑 تنبيه وقف الخسارة (Stop Loss) - Long
-    if longSL
-        msgSL = str.replace(i_msgSL, "{{ticker}}", syminfo.ticker)
-        alert(msgSL, alert.freq_once_per_bar_close)
-if strategy.position_size > 0 and condition ==  1.1 and TPSType == "ATR" and tradeDateIsAllowed
-    strategy.exit(id = 'LXTP2', from_entry = 'Long', qty_percent = i_lxQtyTP2, limit = tp2Line, stop = slLine, comment_profit = 'LXTP2', comment_loss = 'SL')
-    // 🎯 تنبيه الوصول للهدف الثاني (TP2)
-    if longTP2
-        msgTP2 = str.replace(i_msgTP2, "{{ticker}}", syminfo.ticker)
-        alert(msgTP2, alert.freq_once_per_bar_close)
-if strategy.position_size > 0 and condition ==  1.2 and TPSType == "ATR" and tradeDateIsAllowed
-    strategy.exit(id = 'LXTP3', from_entry = 'Long', qty_percent = i_lxQtyTP3, limit = tp3Line, stop = slLine, comment_profit = 'LXTP3', comment_loss = 'SL')
-    // 🎯 تنبيه الوصول للهدف الثالث (TP3)
-    if longTP3
-        msgTP3 = str.replace(i_msgTP3, "{{ticker}}", syminfo.ticker)
-        alert(msgTP3, alert.freq_once_per_bar_close)
-if longX and tradeDateIsAllowed
-    strategy.close('Long', comment = 'LX')
-    // ⚪ تنبيه إغلاق صفقة شراء
-    msgClose = str.replace(i_msgClose, "{{ticker}}", syminfo.ticker)
-    alert(msgClose, alert.freq_once_per_bar_close)
-//<short orders>
-if strategy.position_size >= 0 and shortE and TPSType == "ATR" and tradeDateIsAllowed
-    strategy.entry('Short', strategy.short, comment = 'SE')
-    // 🔴 تنبيه إشارة البيع
-    msgSell = str.replace(i_msgSell, "{{ticker}}", syminfo.ticker)
-    alert(msgSell, alert.freq_once_per_bar_close)
-if strategy.position_size < 0 and condition == -1.0 and TPSType == "ATR" and tradeDateIsAllowed
-    strategy.exit(id = 'SXTP1', from_entry = 'Short', qty_percent = i_sxQtyTP1, limit = tp1Line, stop = slLine, comment_profit = 'SXTP1', comment_loss = 'SL')
-    // 🎯 تنبيه الوصول للهدف الأول (TP1) - Short
-    if shortTP1
-        msgTP1 = str.replace(i_msgTP1, "{{ticker}}", syminfo.ticker)
-        alert(msgTP1, alert.freq_once_per_bar_close)
-    // 🛑 تنبيه وقف الخسارة (Stop Loss) - Short
-    if shortSL
-        msgSL = str.replace(i_msgSL, "{{ticker}}", syminfo.ticker)
-        alert(msgSL, alert.freq_once_per_bar_close)
-if strategy.position_size < 0 and condition == -1.1 and TPSType == "ATR" and tradeDateIsAllowed
-    strategy.exit(id = 'SXTP2', from_entry = 'Short', qty_percent = i_sxQtyTP2, limit = tp2Line, stop = slLine, comment_profit = 'SXTP2', comment_loss = 'SL')
-    // 🎯 تنبيه الوصول للهدف الثاني (TP2) - Short
-    if shortTP2
-        msgTP2 = str.replace(i_msgTP2, "{{ticker}}", syminfo.ticker)
-        alert(msgTP2, alert.freq_once_per_bar_close)
-if strategy.position_size < 0 and condition == -1.2 and TPSType == "ATR" and tradeDateIsAllowed
-    strategy.exit(id = 'SXTP3', from_entry = 'Short', qty_percent = i_sxQtyTP3, limit = tp3Line, stop = slLine, comment_profit = 'SXTP3', comment_loss = 'SL')
-    // 🎯 تنبيه الوصول للهدف الثالث (TP3) - Short
-    if shortTP3
-        msgTP3 = str.replace(i_msgTP3, "{{ticker}}", syminfo.ticker)
-        alert(msgTP3, alert.freq_once_per_bar_close)
-if shortX and tradeDateIsAllowed
-    strategy.close('Short', comment = 'SX')
-    // ⚪ تنبيه إغلاق صفقة بيع
-    msgClose = str.replace(i_msgClose, "{{ticker}}", syminfo.ticker)
-    alert(msgClose, alert.freq_once_per_bar_close)
+// يمكن استخدام هذه الشروط في Create Alert في TradingView
+// You can use these conditions in Create Alert in TradingView
 
 
 // ——————————— <visuals>
@@ -518,9 +450,11 @@ p_slLine     = plot (  condition ==  1.0 or  condition == -1.0 or    condition =
 fill(  p_entryLine, p_slLine,  color      = leTrigger or seTrigger ? na :color.new(color.red, 90))
 
 //<alerts labels>
-plotshape(  i_alertOn and longE,  title      = 'Long',  text       = 'Long',  textcolor  = color.white,  color      = color.green,  style      = shape.labelup,  size       = size.tiny,  location   = location.belowbar)
-plotshape(  i_alertOn and shortE,  title      = 'Short',  text       = 'Short',  textcolor  = color.white,  color      = color.red,  style      = shape.labeldown,  size       = size.tiny,  location   = location.abovebar)
-plotshape(  i_alertOn and (longX or shortX) ? close : na,  title      = 'Close',  text       = 'Close',  textcolor  = color.white,  color      = color.gray,  style      = shape.labelup,  size       = size.tiny,  location   = location.absolute)
+plotshape(  i_alertOn and longE and not longE_Reverse,  title      = 'Long',  text       = 'Long',  textcolor  = color.white,  color      = color.green,  style      = shape.labelup,  size       = size.tiny,  location   = location.belowbar)
+plotshape(  i_alertOn and shortE and not shortE_Reverse,  title      = 'Short',  text       = 'Short',  textcolor  = color.white,  color      = color.red,  style      = shape.labeldown,  size       = size.tiny,  location   = location.abovebar)
+plotshape(  i_alertOn and longE_Reverse,  title      = 'Long Reverse',  text       = 'Long Rev',  textcolor  = color.white,  color      = color.orange,  style      = shape.labelup,  size       = size.tiny,  location   = location.belowbar)
+plotshape(  i_alertOn and shortE_Reverse,  title      = 'Short Reverse',  text       = 'Short Rev',  textcolor  = color.white,  color      = color.orange,  style      = shape.labeldown,  size       = size.tiny,  location   = location.abovebar)
+plotshape(  i_alertOn and (longX or shortX) and not longE_Reverse and not shortE_Reverse ? close : na,  title      = 'Close',  text       = 'Close',  textcolor  = color.white,  color      = color.gray,  style      = shape.labelup,  size       = size.tiny,  location   = location.absolute)
 l_tp         = i_alertOn and (longTP1 or shortTP1) ? close : na
 
 plotshape(  l_tp,  title      = "TP1 Cross",  text       = "TP1",  textcolor  = color.white,  color      = color.olive,  style      = shape.labelup,  size       = size.tiny,  location   = location.absolute)
@@ -531,7 +465,6 @@ plotshape(  i_alertOn and (longSL or shortSL) ? close : na,  title      = "SL Cr
 //<debug>
 plot(  na,  title      = "─── <debug> ───",  editable   = false,  display    = display.data_window)
 plot(  condition,  title      = "condition",  editable   = false,  display    = display.data_window)
-plot(  strategy.position_size * 100,  title      = ".position_size",  editable   = false,  display    = display.data_window)
 //#endregion }
 // ——————————— <↑↑↑ G_RISK ↑↑↑>
 
@@ -622,117 +555,33 @@ barcolor(
 ////////////////////////////////////////////////////////////////////////////////
 
 
-// Declare performance tracking variables
-drawTester = input.bool(true, "Strategy Performance", group='Dashboards', inline="Show Dashboards")
+// Declare performance tracking variables (disabled for indicator - strategy stats not available)
+drawTester = input.bool(false, "Indicator Signals Count", group='Dashboards', inline="Show Dashboards")
 // ═══════════════════════════════════════════════════════════════════════════
-// 🎯 هدف الربح الشهري - Monthly Profit Target
+// 📊 إحصائيات الإشارات - Signal Statistics
 // ═══════════════════════════════════════════════════════════════════════════
-enableMonthlyTarget = input.bool(true, "تفعيل هدف ربح شهري", group='Dashboards', inline="Monthly Target")
-monthlyTargetPercent = input.float(10.0, "الهدف الشهري (%)", minval=0.1, maxval=100.0, step=0.1, group='Dashboards', inline="Monthly Target", tooltip="حدد الهدف الشهري كنسبة مئوية (مثلاً: 10 = 10%)")
-
-var balance = strategy.initial_capital
-var drawdown = 0.0
-var maxDrawdown = 0.0
-var maxBalance = 0.0
-var totalWins = 0
-var totalLoss = 0
-// تتبع عدد الصفقات التي خسرت بسبب Stop Loss (سيتم حسابه في قسم الباك تيست)
 
 // Prepare stats table
-var table testTable = table.new(position.top_right, 5, 4, border_width=1)
+var table testTable = table.new(position.top_right, 3, 3, border_width=1)
 f_fillCell(_table, _column, _row, _title, _value, _bgcolor, _txtcolor) =>
     _cellText = _title + "\n" + _value
     table.cell(_table, _column, _row, _cellText, bgcolor=_bgcolor, text_color=_txtcolor)
-    
-// Custom function to truncate (cut) excess decimal places
-//truncate(_number, _decimalPlaces) =>
-//    _factor = math.pow(10, _decimalPlaces)
-//    int(_number * _factor) / _factor
     
 // Draw stats table
 var bgcolor = color.new(color.black,0)
 if drawTester and tradeDateIsAllowed
     if barstate.islastconfirmedhistory
-        // حساب عدد الصفقات التي أُغلقت بسبب Stop Loss
-        // في Pine Script، لا يمكن الوصول مباشرة لسبب الإغلاق
-        // لذلك نستخدم تقدير بناءً على عدد الصفقات الخاسرة
-        // معظم الصفقات الخاسرة تكون بسبب Stop Loss (على افتراض أن الاستراتيجية تستخدم SL)
-        stopLossTradesFinal = strategy.losstrades > 0 ? strategy.losstrades : 0
+        // عرض إحصائيات الإشارات (للمؤشر فقط)
+        f_fillCell(testTable, 0, 0, "إشارات الشراء:", str.tostring(longSignalsCount), bgcolor, color.white)
+        f_fillCell(testTable, 0, 1, "إشارات البيع:", str.tostring(shortSignalsCount), bgcolor, color.white)
+        f_fillCell(testTable, 0, 2, "إجمالي الإشارات:", str.tostring(longSignalsCount + shortSignalsCount), bgcolor, color.white)
         
-        // Update table
-        dollarReturn = strategy.netprofit
-        f_fillCell(testTable, 0, 0, "Total Trades:", str.tostring(strategy.closedtrades), bgcolor, color.white)
-        f_fillCell(testTable, 0, 1, "Win Rate:", str.tostring(truncate((strategy.wintrades/strategy.closedtrades)*100,2)) + "%", bgcolor, color.white)
-        f_fillCell(testTable, 1, 0, "Starting:", "$" + str.tostring(strategy.initial_capital), bgcolor, color.white)
-        f_fillCell(testTable, 1, 1, "Ending:", "$" + str.tostring(truncate(strategy.initial_capital + strategy.netprofit,2)), bgcolor, color.white)
-        f_fillCell(testTable, 2, 0, "Avg Win:", "$"+ str.tostring(truncate(strategy.grossprofit / strategy.wintrades, 2)), bgcolor, color.white)
-        f_fillCell(testTable, 2, 1, "Avg Loss:", "$"+ str.tostring(truncate(strategy.grossloss / strategy.losstrades, 2)), bgcolor, color.white)
-        f_fillCell(testTable, 3, 0, "Profit Factor:", str.tostring(truncate(strategy.grossprofit / strategy.grossloss,2)), strategy.grossprofit > strategy.grossloss ? color.green : color.red, color.white)
-        f_fillCell(testTable, 3, 1, "Max Runup:",  str.tostring(truncate(strategy.max_runup, 2 )), bgcolor, color.white)
-        // حساب الربح الصافي كنسبة مئوية من رأس المال
-        netProfitPercent = (dollarReturn / strategy.initial_capital) * 100
-        netProfitText = "الربح الصافي: " + (dollarReturn > 0 ? "+" : "") + str.tostring(truncate(netProfitPercent, 2), "#.##") + "%"
-        netProfitDollar = "($" + str.tostring(truncate(dollarReturn, 2), "#.##") + ")"
+        f_fillCell(testTable, 1, 0, "Long Signals:", str.tostring(longSignalsCount), color.green, color.white)
+        f_fillCell(testTable, 1, 1, "Short Signals:", str.tostring(shortSignalsCount), color.red, color.white)
+        f_fillCell(testTable, 1, 2, "Total Signals:", str.tostring(longSignalsCount + shortSignalsCount), bgcolor, color.white)
         
-        f_fillCell(testTable, 4, 0, "Return:", (dollarReturn > 0 ? "+" : "") + str.tostring(truncate(netProfitPercent, 2), "#.##") + "%", dollarReturn > 0 ? color.green : color.red, color.white)
-        f_fillCell(testTable, 4, 1, "Max DD:", str.tostring(truncate((strategy.max_drawdown / strategy.equity) * 100 ,2)) + "%", color.red, color.white)
-        
-        // 🎯 حساب عدد الصفقات المطلوبة لتحقيق الهدف الشهري
-        if enableMonthlyTarget
-            // حساب الهدف الشهري بالدولار
-            monthlyTargetDollar = strategy.initial_capital * (monthlyTargetPercent / 100)
-            
-            if strategy.closedtrades > 0
-                // حساب متوسط الربح لكل صفقة
-                avgProfitPerTrade = strategy.netprofit / strategy.closedtrades
-                // حساب عدد الصفقات المطلوبة
-                requiredTrades = math.ceil(monthlyTargetDollar / math.max(math.abs(avgProfitPerTrade), 0.01))
-                // حساب عدد الصفقات الحالية المتوقعة شهرياً (تقدير بسيط)
-                avgTradesPerMonth = float(strategy.closedtrades)
-                // النسبة المئوية من الهدف المحقق
-                progressPercent = math.min((strategy.netprofit / monthlyTargetDollar) * 100, 100)
-                
-                // عرض معلومات الهدف الشهري في الجدول
-                targetText = "الهدف: " + str.tostring(monthlyTargetPercent, "#.#") + "%"
-                targetValue = "صفقات مطلوبة: " + str.tostring(requiredTrades, "#")
-                progressText = "التقدم: " + str.tostring(truncate(progressPercent, 1), "#.#") + "%"
-                avgTradesText = "صفقات حالية: " + str.tostring(strategy.closedtrades, "#")
-                
-                // لون التقدم
-                progressColor = progressPercent >= 100 ? color.green : progressPercent >= 50 ? color.yellow : color.orange
-                
-                // إضافة صف جديد في الجدول
-                f_fillCell(testTable, 0, 2, targetText, targetValue, bgcolor, color.white)
-                f_fillCell(testTable, 1, 2, progressText, avgTradesText, progressColor, color.white)
-                
-                if avgProfitPerTrade > 0
-                    daysToTarget = math.ceil(requiredTrades / math.max(avgTradesPerMonth / 30.0, 0.1))
-                    estimateText = "متوقع: " + str.tostring(daysToTarget, "#") + " يوم"
-                    avgProfitText = "متوسط: $" + str.tostring(truncate(avgProfitPerTrade, 2), "#.##")
-                    f_fillCell(testTable, 2, 2, estimateText, avgProfitText, bgcolor, color.white)
-            else
-                // لا توجد صفقات بعد - عرض معلومات الهدف فقط
-                targetText = "الهدف: " + str.tostring(monthlyTargetPercent, "#.#") + "%"
-                targetValue = "$" + str.tostring(truncate(monthlyTargetDollar, 2), "#.##")
-                f_fillCell(testTable, 0, 2, targetText, targetValue, bgcolor, color.white)
-                f_fillCell(testTable, 1, 2, "في انتظار الصفقات...", "عدد الصفقات: 0", bgcolor, color.white)
-        
-        // إضافة صف إضافي لعرض الربح الصافي بشكل أوضح
-        netProfitLabel = "الربح الصافي من رأس المال:"
-        netProfitValue = (dollarReturn > 0 ? "+" : "") + str.tostring(truncate(netProfitPercent, 2), "#.##") + "% (" + (dollarReturn > 0 ? "+" : "") + "$" + str.tostring(truncate(dollarReturn, 2), "#.##") + ")"
-        f_fillCell(testTable, 0, 3, netProfitLabel, netProfitValue, dollarReturn > 0 ? color.new(color.green, 70) : color.new(color.red, 70), color.white)
-        f_fillCell(testTable, 1, 3, "رأس المال الأولي:", "$" + str.tostring(strategy.initial_capital, "#"), bgcolor, color.white)
-        f_fillCell(testTable, 2, 3, "رأس المال الحالي:", "$" + str.tostring(truncate(strategy.initial_capital + dollarReturn, 2), "#.##"), dollarReturn > 0 ? color.green : dollarReturn < 0 ? color.red : bgcolor, color.white)
-        
-        // عرض عدد الصفقات التي خسرت بسبب Stop Loss
-        // ملاحظة: في Pine Script لا يمكن معرفة سبب الإغلاق بدقة، لذلك نعرض إجمالي الصفقات الخاسرة
-        // (معظمها تكون بسبب Stop Loss إذا كانت الاستراتيجية تستخدم SL)
-        stopLossLabel = "صفقات Stop Loss:"
-        stopLossValue = str.tostring(stopLossTradesFinal, "#") + " من " + str.tostring(strategy.losstrades, "#") + " خسائر"
-        stopLossPercent = strategy.losstrades > 0 ? (stopLossTradesFinal / strategy.losstrades) * 100 : 0
-        stopLossPercentText = "(" + str.tostring(truncate(stopLossPercent, 1), "#.#") + "% من الخسائر)"
-        f_fillCell(testTable, 3, 3, stopLossLabel, stopLossValue, color.new(color.red, 60), color.white)
-        f_fillCell(testTable, 4, 3, stopLossPercentText, "إجمالي الخسائر: $" + str.tostring(truncate(strategy.grossloss, 2), "#.##"), bgcolor, color.white)
+        f_fillCell(testTable, 2, 0, "Note:", "Indicator Mode", bgcolor, color.yellow)
+        f_fillCell(testTable, 2, 1, "No Strategy", "Stats Available", bgcolor, color.yellow)
 // --- END TESTER CODE --- ///////////////
 
 
@@ -778,15 +627,18 @@ var string[]   a_win_trades          = array.new_string()  // Save the number of
 var _a_day_week                      = array.new_int()  // Save the day of the week to split data
 
 // __________________________  Custom Functions  ________________________________
-//~ create a counter so that it gives a number to strategy.closed_trades.entry_time(counter)
+// ملاحظة: هذه الدوال معطلة في وضع المؤشر لأنها تعتمد على إحصائيات الاستراتيجية
+// Note: These functions are disabled in indicator mode as they depend on strategy statistics
 var trade_number = -1
-if strategy.closedtrades > strategy.closedtrades[1]
-    trade_number += 1
+// if strategy.closedtrades > strategy.closedtrades[1]
+//     trade_number += 1
 
 f_strategy_closedtrades_hour() =>
-    switch 
-        i_check_open_close =="Closed" => dayofweek(strategy.closedtrades.exit_time(trade_number), timezone_setting)
-        i_check_open_close =="Opened"  => dayofweek(strategy.closedtrades.entry_time(trade_number), timezone_setting)
+    // Disabled for indicator - returns 0 (dayofweek returns int, so we return 0 instead of na)
+    0
+    // switch 
+    //     i_check_open_close =="Closed" => dayofweek(strategy.closedtrades.exit_time(trade_number), timezone_setting)
+    //     i_check_open_close =="Opened"  => dayofweek(strategy.closedtrades.entry_time(trade_number), timezone_setting)
 
 f_data(_i) =>
     var _closed_trades          = 0
@@ -796,16 +648,16 @@ f_data(_i) =>
     var _txt_loss_trades        = ""
     var _txt_win_trades         = ""
 
-
-    if strategy.closedtrades > strategy.closedtrades[1] and f_strategy_closedtrades_hour() == _i
-        _closed_trades += 1
-        _txt_closed_trades := str.tostring(_closed_trades)
-    if strategy.losstrades > strategy.losstrades[1]     and f_strategy_closedtrades_hour() == _i
-        _loss_trades += 1
-        _txt_loss_trades := str.tostring(_loss_trades)        
-    if strategy.wintrades > strategy.wintrades[1]       and f_strategy_closedtrades_hour() == _i
-        _win_trades += 1
-        _txt_win_trades := str.tostring(_win_trades) 
+    // Disabled for indicator - returns empty strings
+    // if strategy.closedtrades > strategy.closedtrades[1] and f_strategy_closedtrades_hour() == _i
+    //     _closed_trades += 1
+    //     _txt_closed_trades := str.tostring(_closed_trades)
+    // if strategy.losstrades > strategy.losstrades[1]     and f_strategy_closedtrades_hour() == _i
+    //     _loss_trades += 1
+    //     _txt_loss_trades := str.tostring(_loss_trades)        
+    // if strategy.wintrades > strategy.wintrades[1]       and f_strategy_closedtrades_hour() == _i
+    //     _win_trades += 1
+    //     _txt_win_trades := str.tostring(_win_trades) 
     [_txt_closed_trades, _txt_loss_trades, _txt_win_trades]                                                       
 
 
@@ -908,10 +760,13 @@ i_showMonthlyPerformance = input.bool(false, 'Monthly Performance', group='Dashb
 i_monthlyReturnPercision = 2
 
 if i_showMonthlyPerformance and tradeDateIsAllowed
+    // ملاحظة: جدول الأداء الشهري معطل في وضع المؤشر لأنه يعتمد على strategy.equity
+    // Note: Monthly Performance table is disabled in indicator mode as it depends on strategy.equity
     new_month = month(time) != month(time[1])
     new_year  = year(time)  != year(time[1])
     
-    eq = strategy.equity
+    // eq = strategy.equity  // Disabled for indicator
+    eq = close  // Use close price as placeholder (not meaningful for P&L)
     
     bar_pnl = eq / eq[1] - 1
     
@@ -1096,3 +951,18 @@ if DemaAtrShort
 // Plotting
 plot( showAtr ? DemaAtr : na,  "ATR",  color=Trendcolor,  linewidth = 2 )
 // ==========================================================================================
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🔔 ALERT CONDITIONS - شروط التنبيهات
+// ═══════════════════════════════════════════════════════════════════════════
+// يمكن استخدام هذه الشروط في Create Alert في TradingView
+// You can use these conditions in Create Alert in TradingView
+
+alertcondition(longE, title='🟢 LONG Signal', message='LONG Entry Signal - Price: {{close}}')
+alertcondition(shortE, title='🔴 SHORT Signal', message='SHORT Entry Signal - Price: {{close}}')
+alertcondition(longE_Reverse, title='🟠 LONG REVERSE Signal', message='LONG REVERSE Entry Signal (Position Reversed) - Price: {{close}}')
+alertcondition(shortE_Reverse, title='🟠 SHORT REVERSE Signal', message='SHORT REVERSE Entry Signal (Position Reversed) - Price: {{close}}')
+alertcondition(longTP1 or shortTP1, title='🎯 TP1 Hit', message='TP1 Target Reached - Price: {{close}}')
+alertcondition(longTP2 or shortTP2, title='🎯 TP2 Hit', message='TP2 Target Reached - Price: {{close}}')
+alertcondition(longTP3 or shortTP3, title='🎯 TP3 Hit', message='TP3 Target Reached - Price: {{close}}')
+alertcondition(longSL or shortSL, title='🛑 Stop Loss', message='Stop Loss Hit - Price: {{close}}')
