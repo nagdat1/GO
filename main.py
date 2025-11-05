@@ -16,6 +16,7 @@ from telegram_bot import (
 from config import WEBHOOK_PORT, DEBUG, get_config_status
 import logging
 import json
+import re
 from datetime import datetime
 import hashlib
 
@@ -105,7 +106,13 @@ def webhook(chat_id=None):
                                     break
                         
                         json_str = raw_data[start_idx:end_idx]
-                        logger.info(f"📥 Extracted JSON: {json_str[:200]}...")
+                        
+                        # Replace TradingView placeholders that weren't substituted
+                        # {{plot("...")}} -> null
+                        json_str = re.sub(r'\{\{plot\([^)]+\)\}\}', 'null', json_str)
+                        json_str = re.sub(r'\{\{[^}]+\}\}', 'null', json_str)  # Any other {{...}}
+                        
+                        logger.info(f"📥 Cleaned JSON: {json_str[:200]}...")
                         data = json.loads(json_str)
                     else:
                         # Try parsing the whole thing
