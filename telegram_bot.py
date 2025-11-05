@@ -211,7 +211,8 @@ def format_sell_signal(data: dict) -> str:
     message += f"📈 الإطار الزمني: {escape_html(timeframe)}\n\n"
     
     # عرض TP/SL المتاحة
-    if tp1 or tp2 or tp3 or stop_loss:
+    has_tp_sl = tp1 or tp2 or tp3 or stop_loss
+    if has_tp_sl:
         message += f"🎯 <b>أهداف الربح:</b>\n"
         if tp1:
             message += f"🎯 TP1: <code>{format_price(float(tp1))}</code>\n"
@@ -222,6 +223,8 @@ def format_sell_signal(data: dict) -> str:
         message += "\n"
         if stop_loss:
             message += f"🛑 وقف الخسارة: <code>{format_price(float(stop_loss))}</code>"
+    else:
+        message += f"⚠️ <i>ملاحظة: TP/SL غير متاحة - تأكد من أسماء الـ plots في التنبيه</i>"
     
     return message
 
@@ -244,7 +247,8 @@ def format_buy_reverse_signal(data: dict) -> str:
     message += f"📈 الإطار الزمني: {escape_html(timeframe)}\n\n"
     
     # عرض TP/SL المتاحة
-    if tp1 or tp2 or tp3 or stop_loss:
+    has_tp_sl = tp1 or tp2 or tp3 or stop_loss
+    if has_tp_sl:
         message += f"🎯 <b>أهداف الربح:</b>\n"
         if tp1:
             message += f"🎯 TP1: <code>{format_price(float(tp1))}</code>\n"
@@ -255,6 +259,8 @@ def format_buy_reverse_signal(data: dict) -> str:
         message += "\n"
         if stop_loss:
             message += f"🛑 وقف الخسارة: <code>{format_price(float(stop_loss))}</code>"
+    else:
+        message += f"⚠️ <i>ملاحظة: TP/SL غير متاحة - تأكد من أسماء الـ plots في التنبيه</i>"
     
     return message
 
@@ -277,7 +283,8 @@ def format_sell_reverse_signal(data: dict) -> str:
     message += f"📈 الإطار الزمني: {escape_html(timeframe)}\n\n"
     
     # عرض TP/SL المتاحة
-    if tp1 or tp2 or tp3 or stop_loss:
+    has_tp_sl = tp1 or tp2 or tp3 or stop_loss
+    if has_tp_sl:
         message += f"🎯 <b>أهداف الربح:</b>\n"
         if tp1:
             message += f"🎯 TP1: <code>{format_price(float(tp1))}</code>\n"
@@ -288,6 +295,8 @@ def format_sell_reverse_signal(data: dict) -> str:
         message += "\n"
         if stop_loss:
             message += f"🛑 وقف الخسارة: <code>{format_price(float(stop_loss))}</code>"
+    else:
+        message += f"⚠️ <i>ملاحظة: TP/SL غير متاحة - تأكد من أسماء الـ plots في التنبيه</i>"
     
     return message
 
