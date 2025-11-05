@@ -10,10 +10,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+TELEGRAM_GET_CHAT_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getChat"
+TELEGRAM_GET_ME_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getMe"
 
 # Rate limiting: آخر وقت إرسال رسالة (لتجنب spam)
 _last_message_time = 0
-_min_delay_between_messages = 0.5  # 500ms بين كل رسالة (لتجنب spam detection)
+_min_delay_between_messages = 1.0  # 1 ثانية بين كل رسالة (آمن جداً)
+_bot_kicked_chats = set()  # حفظ قائمة المجموعات التي طُرد منها البوت
+_max_retries = 3  # عدد المحاولات
 
 def escape_html(text: str) -> str:
     """تهريب الأحرف الخاصة في HTML"""
@@ -38,15 +42,62 @@ def format_price(price: float) -> str:
     else:
         return f"{price:.8f}".rstrip('0').rstrip('.')
 
-def send_message(message: str, chat_id: str = None) -> bool:
-    """إرسال رسالة إلى Telegram مع rate limiting لتجنب spam"""
-    global _last_message_time, _min_delay_between_messages
+def check_bot_status(chat_id: str) -> bool:
+    """التحقق من حالة البوت في المجموعة قبل الإرسال"""
+    global _bot_kicked_chats
+    
+    chat_id_str = str(chat_id)
+    
+    # إذا كان البوت طُرد سابقاً، تحقق مرة أخرى بعد 5 دقائق
+    if chat_id_str in _bot_kicked_chats:
+        logger.warning(f"⚠️ البوت كان محظوراً سابقاً في {chat_id_str}، سيتم التحقق مرة أخرى...")
+        # يمكن إضافة منطق للتحقق مرة أخرى بعد فترة
+    
+    try:
+        # التحقق من حالة البوت في المجموعة
+        response = requests.get(
+            TELEGRAM_GET_CHAT_URL,
+            params={"chat_id": chat_id_str},
+            timeout=5
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('ok'):
+                # البوت موجود في المجموعة
+                if chat_id_str in _bot_kicked_chats:
+                    _bot_kicked_chats.remove(chat_id_str)
+                    logger.info(f"✅ البوت تم إضافته مرة أخرى إلى {chat_id_str}")
+                return True
+            else:
+                error = result.get('description', '')
+                if 'kicked' in error.lower() or 'not found' in error.lower():
+                    _bot_kicked_chats.add(chat_id_str)
+                    logger.error(f"❌ البوت غير موجود في المجموعة: {error}")
+                    return False
+        
+        return True  # إذا فشل التحقق، حاول الإرسال على أي حال
+    except Exception as e:
+        logger.warning(f"⚠️ فشل التحقق من حالة البوت: {e}")
+        return True  # إذا فشل التحقق، حاول الإرسال على أي حال
+
+def send_message(message: str, chat_id: str = None, retry_count: int = 0) -> bool:
+    """إرسال رسالة إلى Telegram مع rate limiting وتجنب spam"""
+    global _last_message_time, _min_delay_between_messages, _max_retries
     
     try:
         target_chat_id = chat_id or TELEGRAM_CHAT_ID
         if not target_chat_id:
             logger.error("❌ No chat ID provided - يجب تحديد Chat ID")
             return False
+        
+        chat_id_str = str(target_chat_id)
+        
+        # التحقق من حالة البوت قبل الإرسال (فقط في المحاولة الأولى)
+        if retry_count == 0:
+            if not check_bot_status(chat_id_str):
+                logger.error(f"❌ البوت غير موجود في المجموعة {chat_id_str} - لن يتم الإرسال")
+                return False
         
         # Rate limiting: تأخير بسيط بين الرسائل لتجنب spam detection
         current_time = time.time()
@@ -55,9 +106,6 @@ def send_message(message: str, chat_id: str = None) -> bool:
             sleep_time = _min_delay_between_messages - time_since_last_message
             time.sleep(sleep_time)
         _last_message_time = time.time()
-        
-        # تحويل chat_id إلى string (للمجموعات قد يكون سالباً)
-        chat_id_str = str(target_chat_id)
         
         payload = {
             "chat_id": chat_id_str,
@@ -81,14 +129,22 @@ def send_message(message: str, chat_id: str = None) -> bool:
                     logger.error("❌ المشكلة: Chat ID غير صحيح أو البوت غير عضو في المجموعة!")
                     logger.error("💡 الحل: أضف البوت إلى المجموعة مرة أخرى")
                 elif 'bot was blocked' in error_description.lower() or 'kicked' in error_description.lower():
+                    _bot_kicked_chats.add(chat_id_str)
                     logger.error("❌ المشكلة: البوت تم طرده من المجموعة!")
                     logger.error("💡 الحل: أضف البوت إلى المجموعة مرة أخرى من إعدادات المجموعة")
                     logger.error("💡 لمنع الطرد: تأكد من أن البوت لديه صلاحية 'Send Messages' في إعدادات المجموعة")
+                    return False
                 elif 'too many requests' in error_description.lower() or 'flood' in error_description.lower():
                     logger.error("❌ المشكلة: إرسال رسائل كثيرة جداً (Rate Limit)!")
                     logger.error("💡 الحل: البوت سيقلل من سرعة الإرسال تلقائياً")
-                    # زيادة التأخير مؤقتاً
-                    _min_delay_between_messages = min(_min_delay_between_messages * 2, 2.0)  # حد أقصى 2 ثانية
+                    # زيادة التأخير مؤقتاً بشكل تدريجي
+                    _min_delay_between_messages = min(_min_delay_between_messages * 1.5, 3.0)  # حد أقصى 3 ثواني
+                    # إعادة المحاولة بعد التأخير
+                    if retry_count < _max_retries:
+                        wait_time = _min_delay_between_messages * (retry_count + 1)
+                        logger.info(f"⏳ انتظار {wait_time:.1f} ثانية قبل إعادة المحاولة...")
+                        time.sleep(wait_time)
+                        return send_message(message, chat_id, retry_count + 1)
                 return False
         else:
             logger.error(f"❌ HTTP Error {response.status_code}: {response.text}")
@@ -235,14 +291,21 @@ def format_tp1_hit(data: dict) -> str:
     """تنسيق رسالة ضرب الهدف الأول"""
     symbol = data.get('symbol', 'N/A')
     entry_price = data.get('entry_price', 0)
-    exit_price = data.get('exit_price') or data.get('tp1') or data.get('price', 0)
+    tp1 = data.get('tp1')
+    exit_price = data.get('exit_price') or tp1 or data.get('price', 0)
     time = data.get('time', 'N/A')
+    
+    # إذا كان exit_price = entry_price، استخدم tp1 كقيمة
+    if exit_price and entry_price and float(exit_price) == float(entry_price) and tp1:
+        exit_price = tp1
     
     message = f"🎯✅ <b>تم ضرب الهدف الأول (TP1)</b> ✅🎯\n\n"
     message += f"📊 الرمز: {escape_html(symbol)}\n"
     if entry_price:
         message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
     message += f"💰 سعر الخروج: <code>{format_price(exit_price)}</code>\n"
+    if tp1:
+        message += f"🎯 TP1: <code>{format_price(float(tp1))}</code>\n"
     message += f"⏰ الوقت: {escape_html(time)}"
     
     return message
@@ -251,14 +314,21 @@ def format_tp2_hit(data: dict) -> str:
     """تنسيق رسالة ضرب الهدف الثاني"""
     symbol = data.get('symbol', 'N/A')
     entry_price = data.get('entry_price', 0)
-    exit_price = data.get('exit_price') or data.get('tp2') or data.get('price', 0)
+    tp2 = data.get('tp2')
+    exit_price = data.get('exit_price') or tp2 or data.get('price', 0)
     time = data.get('time', 'N/A')
+    
+    # إذا كان exit_price = entry_price، استخدم tp2 كقيمة
+    if exit_price and entry_price and float(exit_price) == float(entry_price) and tp2:
+        exit_price = tp2
     
     message = f"🎯✅ <b>تم ضرب الهدف الثاني (TP2)</b> ✅🎯\n\n"
     message += f"📊 الرمز: {escape_html(symbol)}\n"
     if entry_price:
         message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
     message += f"💰 سعر الخروج: <code>{format_price(exit_price)}</code>\n"
+    if tp2:
+        message += f"🎯 TP2: <code>{format_price(float(tp2))}</code>\n"
     message += f"⏰ الوقت: {escape_html(time)}"
     
     return message
@@ -267,14 +337,21 @@ def format_tp3_hit(data: dict) -> str:
     """تنسيق رسالة ضرب الهدف الثالث"""
     symbol = data.get('symbol', 'N/A')
     entry_price = data.get('entry_price', 0)
-    exit_price = data.get('exit_price') or data.get('tp3') or data.get('price', 0)
+    tp3 = data.get('tp3')
+    exit_price = data.get('exit_price') or tp3 or data.get('price', 0)
     time = data.get('time', 'N/A')
+    
+    # إذا كان exit_price = entry_price، استخدم tp3 كقيمة
+    if exit_price and entry_price and float(exit_price) == float(entry_price) and tp3:
+        exit_price = tp3
     
     message = f"🎯✅ <b>تم ضرب الهدف الثالث (TP3)</b> ✅🎯\n\n"
     message += f"📊 الرمز: {escape_html(symbol)}\n"
     if entry_price:
         message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
     message += f"💰 سعر الخروج: <code>{format_price(exit_price)}</code>\n"
+    if tp3:
+        message += f"🎯 TP3: <code>{format_price(float(tp3))}</code>\n"
     message += f"⏰ الوقت: {escape_html(time)}"
     
     return message
@@ -283,14 +360,21 @@ def format_stop_loss_hit(data: dict) -> str:
     """تنسيق رسالة ضرب وقف الخسارة"""
     symbol = data.get('symbol', 'N/A')
     entry_price = data.get('entry_price', 0)
-    exit_price = data.get('exit_price') or data.get('stop_loss') or data.get('price', 0)
+    stop_loss = data.get('stop_loss')
+    exit_price = data.get('exit_price') or stop_loss or data.get('price', 0)
     time = data.get('time', 'N/A')
+    
+    # إذا كان exit_price = entry_price، استخدم stop_loss كقيمة
+    if exit_price and entry_price and float(exit_price) == float(entry_price) and stop_loss:
+        exit_price = stop_loss
     
     message = f"🛑😔 <b>تم ضرب وقف الخسارة (Stop Loss)</b> 😔🛑\n\n"
     message += f"📊 الرمز: {escape_html(symbol)}\n"
     if entry_price:
         message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
     message += f"💰 سعر الخروج: <code>{format_price(exit_price)}</code>\n"
+    if stop_loss:
+        message += f"🛑 Stop Loss: <code>{format_price(float(stop_loss))}</code>\n"
     message += f"⏰ الوقت: {escape_html(time)}"
     
     return message

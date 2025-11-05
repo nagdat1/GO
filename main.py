@@ -75,6 +75,70 @@ def health_check():
         }
     }), 200
 
+@app.route('/telegram-webhook', methods=['POST'])
+def telegram_webhook():
+    """Webhook endpoint للبوت - للرد على الأوامر مثل /start"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"status": "ok"}), 200
+        
+        message = data.get('message', {})
+        chat = message.get('chat', {})
+        text = message.get('text', '')
+        chat_id = str(chat.get('id', ''))
+        
+        # الرد على الأوامر
+        if text.startswith('/start'):
+            from telegram_bot import send_message
+            welcome_msg = (
+                "🤖 <b>مرحباً! أنا بوت إشارات التداول</b>\n\n"
+                "✅ البوت يعمل بشكل صحيح\n"
+                "📊 سأرسل إشارات التداول من TradingView تلقائياً\n\n"
+                "💡 <b>الأوامر المتاحة:</b>\n"
+                "/start - عرض هذه الرسالة\n"
+                "/help - عرض المساعدة\n"
+                "/status - حالة البوت"
+            )
+            send_message(welcome_msg, chat_id)
+            return jsonify({"status": "ok"}), 200
+        
+        elif text.startswith('/help'):
+            from telegram_bot import send_message
+            help_msg = (
+                "📖 <b>مساعدة - بوت إشارات التداول</b>\n\n"
+                "🔹 <b>كيف يعمل البوت:</b>\n"
+                "• يستقبل إشارات من TradingView\n"
+                "• يرسل إشارات التداول تلقائياً\n"
+                "• يعرض TP/SL والأسعار\n\n"
+                "🔹 <b>أنواع الإشارات:</b>\n"
+                "• 🟢 صفقة لونج (BUY)\n"
+                "• 🔴 صفقة شورت (SELL)\n"
+                "• 🟠 صفقات عكسية (REVERSE)\n"
+                "• 🎯 أهداف الربح (TP1, TP2, TP3)\n"
+                "• 🛑 وقف الخسارة (SL)\n\n"
+                "💡 البوت يعمل تلقائياً، لا حاجة لإرسال أوامر!"
+            )
+            send_message(help_msg, chat_id)
+            return jsonify({"status": "ok"}), 200
+        
+        elif text.startswith('/status'):
+            from telegram_bot import send_message
+            status_msg = (
+                "✅ <b>حالة البوت: نشط</b>\n\n"
+                "🤖 البوت يعمل بشكل صحيح\n"
+                "📊 جاهز لاستقبال الإشارات من TradingView\n"
+                "⚡ Rate limiting: مفعّل\n"
+                "🔒 حماية من spam: مفعّلة"
+            )
+            send_message(status_msg, chat_id)
+            return jsonify({"status": "ok"}), 200
+        
+        return jsonify({"status": "ok"}), 200
+    except Exception as e:
+        logger.error(f"Error in telegram webhook: {e}")
+        return jsonify({"status": "ok"}), 200  # دائماً نرد OK حتى لا يحاول Telegram إعادة الإرسال
+
 @app.route('/webhook', methods=['POST', 'GET'])
 @app.route('/personal/<chat_id>/webhook', methods=['POST', 'GET'])
 def webhook(chat_id=None):

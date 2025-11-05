@@ -15,6 +15,7 @@ TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '-1003252117175')  # Chat ID ل
 # Webhook Configuration
 WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', '')  # Optional: for security
 WEBHOOK_PORT = int(os.getenv('PORT', 5000))
+WEBHOOK_URL = os.getenv('WEBHOOK_URL', '')  # URL للبوت (اختياري)
 
 # Flask Configuration
 FLASK_ENV = os.getenv('FLASK_ENV', 'production')
