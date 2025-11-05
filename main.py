@@ -504,6 +504,25 @@ def webhook(chat_id=None):
                 if json_match:
                     json_str = json_match.group(0)
                     logger.info(f"Found JSON in text (length: {len(json_str)} chars): {json_str[:200]}...")
+                    
+                    # Fix: Replace TradingView plot placeholders with actual values or extract them
+                    # Handle cases where {{plot_22}} or {{plot("Signal Type Code")}} weren't replaced
+                    import re
+                    # Check if signal field contains plot placeholder
+                    if '{{plot' in json_str or '{{plot_' in json_str:
+                        logger.warning("⚠️ Detected TradingView plot placeholder in JSON - attempting to fix...")
+                        # Try to extract signal code from text alert format (SIGNAL_CODE:...)
+                        signal_code_match = re.search(r'SIGNAL_CODE:(\d+)', raw_data_cleaned)
+                        if signal_code_match:
+                            signal_code = signal_code_match.group(1)
+                            json_str = re.sub(r'"signal"\s*:\s*\{\{[^}]+\}\}', f'"signal":{signal_code}', json_str)
+                            logger.info(f"✅ Fixed signal field using SIGNAL_CODE from text: {signal_code}")
+                        else:
+                            # Try to extract from plot name (plot_22 means it's the 22nd plot, which might be Signal Type Code)
+                            # Replace {{plot_22}} or {{plot("Signal Type Code")}} with 0 (unknown) and let parsing continue
+                            json_str = re.sub(r'\{\{plot[^}]+\}\}', '0', json_str)
+                            logger.warning("⚠️ Replaced plot placeholder with 0 (will try to detect signal type from context)")
+                    
                     try:
                         data = json.loads(json_str)
                         logger.info("✅ Successfully parsed JSON extracted from text")
@@ -521,8 +540,22 @@ def webhook(chat_id=None):
                 else:
                     # No JSON found in text, try to parse whole string as JSON
                     logger.info("No JSON pattern found, trying to parse whole string as JSON...")
+                    # Fix: Replace TradingView plot placeholders before parsing
+                    raw_data_for_json = raw_data_cleaned
+                    if '{{plot' in raw_data_for_json or '{{plot_' in raw_data_for_json:
+                        logger.warning("⚠️ Detected TradingView plot placeholder in raw data - attempting to fix...")
+                        # Try to extract signal code from text alert format (SIGNAL_CODE:...)
+                        signal_code_match = re.search(r'SIGNAL_CODE:(\d+)', raw_data_for_json)
+                        if signal_code_match:
+                            signal_code = signal_code_match.group(1)
+                            raw_data_for_json = re.sub(r'"signal"\s*:\s*\{\{[^}]+\}\}', f'"signal":{signal_code}', raw_data_for_json)
+                            logger.info(f"✅ Fixed signal field using SIGNAL_CODE from text: {signal_code}")
+                        else:
+                            # Replace {{plot_22}} or {{plot("Signal Type Code")}} with 0 (unknown)
+                            raw_data_for_json = re.sub(r'\{\{plot[^}]+\}\}', '0', raw_data_for_json)
+                            logger.warning("⚠️ Replaced plot placeholder with 0 (will try to detect signal type from context)")
                     try:
-                        data = json.loads(raw_data_cleaned)
+                        data = json.loads(raw_data_for_json)
                         logger.info("✅ Successfully parsed JSON from raw data")
                         logger.info(f"Parsed JSON keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
                     except json.JSONDecodeError:
@@ -667,6 +700,27 @@ def webhook(chat_id=None):
             logger.info(f"📊 Converted Signal Code {original_signal} → {signal}")
         elif isinstance(signal, str):
             signal = signal.upper()
+        
+        # If signal is still 0 or empty/unknown, try to detect from context
+        if signal == 0 or signal == '' or signal == 'UNKNOWN' or (isinstance(signal, str) and signal.upper() == 'UNKNOWN'):
+            logger.warning("⚠️ Signal type is unknown (0 or empty) - attempting to detect from context...")
+            # Try to detect signal type from data context
+            # This is a fallback when plot placeholder wasn't replaced
+            entry_price = data.get('entry_price') or data.get('price')
+            tp1 = data.get('tp1')
+            tp2 = data.get('tp2')
+            tp3 = data.get('tp3')
+            stop_loss = data.get('stop_loss')
+            
+            # If we have TP/SL values, it's likely an entry signal
+            # But we can't determine if it's BUY or SELL without more context
+            # For now, set to UNKNOWN and let the error handler deal with it
+            if entry_price and (tp1 or tp2 or tp3 or stop_loss):
+                logger.warning("⚠️ Detected entry signal structure but cannot determine BUY/SELL - will try to parse as BUY by default")
+                signal = 'BUY'  # Default to BUY, user can manually correct if needed
+            else:
+                logger.error("❌ Cannot determine signal type from context")
+                signal = 'UNKNOWN'
         
         logger.info(f"Signal type: {signal}")
         logger.info(f"Symbol: {data.get('symbol', 'N/A')}")
