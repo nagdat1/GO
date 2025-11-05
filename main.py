@@ -32,17 +32,29 @@ app = Flask(__name__)
 
 # Simple cache to prevent duplicate messages (last 5 minutes)
 recent_messages = {}
+last_signal_time = {}  # لتتبع آخر إشارة لكل رمز
 
 def get_message_key(data: dict) -> str:
     """Generate a unique key for a message to detect duplicates"""
     signal = data.get('signal', '')
     symbol = data.get('symbol', '')
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-    return f"{signal}_{symbol}_{timestamp}"
+    entry_price = data.get('entry_price', 0)
+    
+    # استخدام السعر أيضاً لتجنب التكرار في نفس الثانية
+    # تقريب السعر لأقرب 2 أرقام عشرية
+    try:
+        price_rounded = round(float(entry_price), 2) if entry_price else 0
+    except:
+        price_rounded = 0
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # بالثواني بدلاً من الدقائق
+    return f"{signal}_{symbol}_{price_rounded}_{timestamp}"
 
-def is_recent_duplicate(message_key: str) -> bool:
-    """Check if message was sent recently (within last 5 minutes)"""
+def is_recent_duplicate(message_key: str, data: dict) -> bool:
+    """Check if message was sent recently (within last 30 seconds for same signal)"""
     current_time = datetime.now()
+    signal = data.get('signal', '')
+    symbol = data.get('symbol', '')
     
     # تنظيف الرسائل القديمة (أكثر من 10 دقائق) لتوفير الذاكرة
     keys_to_remove = []
@@ -53,12 +65,36 @@ def is_recent_duplicate(message_key: str) -> bool:
     for key in keys_to_remove:
         del recent_messages[key]
     
-    # التحقق من التكرار
+    # التحقق من التكرار بناءً على نوع الإشارة
+    signal_key = f"{signal}_{symbol}"
+    
+    # للإشارات الرئيسية (BUY, SELL, etc.)، منع التكرار لمدة 30 ثانية
+    if signal in ['BUY', 'SELL', 'BUY_REVERSE', 'SELL_REVERSE', 'LONG', 'SHORT', 'LONG_REVERSE', 'SHORT_REVERSE']:
+        if signal_key in last_signal_time:
+            last_time = last_signal_time[signal_key]
+            time_diff = (current_time - last_time).total_seconds()
+            if time_diff < 30:  # 30 seconds
+                logger.warning(f"⚠️ تم تجاهل إشارة متكررة: {signal} لـ {symbol} (آخر إشارة قبل {time_diff:.1f} ثانية)")
+                return True
+        last_signal_time[signal_key] = current_time
+    
+    # للإشارات TP/SL، منع التكرار لمدة 15 ثانية
+    elif signal in ['TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_LOSS', 'TP1', 'TP2', 'TP3', 'SL']:
+        if signal_key in last_signal_time:
+            last_time = last_signal_time[signal_key]
+            time_diff = (current_time - last_time).total_seconds()
+            if time_diff < 15:  # 15 seconds
+                logger.warning(f"⚠️ تم تجاهل إشارة متكررة: {signal} لـ {symbol} (آخر إشارة قبل {time_diff:.1f} ثانية)")
+                return True
+        last_signal_time[signal_key] = current_time
+    
+    # التحقق من المفتاح الأساسي
     if message_key in recent_messages:
         last_sent = recent_messages[message_key]
         time_diff = (current_time - last_sent).total_seconds()
-        if time_diff < 300:  # 5 minutes
+        if time_diff < 60:  # 1 minute
             return True
+    
     recent_messages[message_key] = current_time
     return False
 
@@ -212,7 +248,7 @@ def webhook(chat_id=None):
         
         # Check for duplicates
         message_key = get_message_key(data)
-        if is_recent_duplicate(message_key):
+        if is_recent_duplicate(message_key, data):
             logger.warning(f"⚠️ Duplicate message ignored: {message_key}")
             return jsonify({"status": "ignored", "message": "Duplicate"}), 200
         

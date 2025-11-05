@@ -367,20 +367,35 @@ def format_tp1_hit(data: dict) -> str:
     symbol = data.get('symbol', 'N/A')
     entry_price = data.get('entry_price', 0)
     tp1 = data.get('tp1')
-    exit_price = data.get('exit_price') or tp1 or data.get('price', 0)
+    exit_price = data.get('exit_price') or data.get('price', 0)
     time = data.get('time', 'N/A')
     
-    # إذا كان exit_price = entry_price، استخدم tp1 كقيمة
-    if exit_price and entry_price and float(exit_price) == float(entry_price) and tp1:
-        exit_price = tp1
+    # تحسين: إذا كان exit_price = entry_price، استخدم tp1 أو close
+    if exit_price and entry_price:
+        try:
+            if abs(float(exit_price) - float(entry_price)) < 0.01:  # تقريباً نفس القيمة
+                if tp1:
+                    exit_price = tp1
+                    logger.info(f"✅ TP1 Hit: تم استخدام TP1 كسعر خروج لأن exit_price = entry_price")
+        except (ValueError, TypeError):
+            pass
     
     message = f"🎯✅ <b>تم ضرب الهدف الأول (TP1)</b> ✅🎯\n\n"
     message += f"📊 الرمز: {escape_html(symbol)}\n"
-    if entry_price:
-        message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+    
+    # عرض سعر الدخول فقط إذا كان مختلفاً عن سعر الخروج
+    if entry_price and exit_price:
+        try:
+            if abs(float(entry_price) - float(exit_price)) > 0.01:
+                message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+        except (ValueError, TypeError):
+            message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+    
     message += f"💰 سعر الخروج: <code>{format_price(exit_price)}</code>\n"
+    
     if tp1:
         message += f"🎯 TP1: <code>{format_price(float(tp1))}</code>\n"
+    
     message += f"⏰ الوقت: {escape_html(time)}"
     
     return message
@@ -390,20 +405,35 @@ def format_tp2_hit(data: dict) -> str:
     symbol = data.get('symbol', 'N/A')
     entry_price = data.get('entry_price', 0)
     tp2 = data.get('tp2')
-    exit_price = data.get('exit_price') or tp2 or data.get('price', 0)
+    exit_price = data.get('exit_price') or data.get('price', 0)
     time = data.get('time', 'N/A')
     
-    # إذا كان exit_price = entry_price، استخدم tp2 كقيمة
-    if exit_price and entry_price and float(exit_price) == float(entry_price) and tp2:
-        exit_price = tp2
+    # تحسين: إذا كان exit_price = entry_price، استخدم tp2
+    if exit_price and entry_price:
+        try:
+            if abs(float(exit_price) - float(entry_price)) < 0.01:
+                if tp2:
+                    exit_price = tp2
+                    logger.info(f"✅ TP2 Hit: تم استخدام TP2 كسعر خروج لأن exit_price = entry_price")
+        except (ValueError, TypeError):
+            pass
     
     message = f"🎯✅ <b>تم ضرب الهدف الثاني (TP2)</b> ✅🎯\n\n"
     message += f"📊 الرمز: {escape_html(symbol)}\n"
-    if entry_price:
-        message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+    
+    # عرض سعر الدخول فقط إذا كان مختلفاً عن سعر الخروج
+    if entry_price and exit_price:
+        try:
+            if abs(float(entry_price) - float(exit_price)) > 0.01:
+                message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+        except (ValueError, TypeError):
+            message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+    
     message += f"💰 سعر الخروج: <code>{format_price(exit_price)}</code>\n"
+    
     if tp2:
         message += f"🎯 TP2: <code>{format_price(float(tp2))}</code>\n"
+    
     message += f"⏰ الوقت: {escape_html(time)}"
     
     return message
@@ -413,20 +443,35 @@ def format_tp3_hit(data: dict) -> str:
     symbol = data.get('symbol', 'N/A')
     entry_price = data.get('entry_price', 0)
     tp3 = data.get('tp3')
-    exit_price = data.get('exit_price') or tp3 or data.get('price', 0)
+    exit_price = data.get('exit_price') or data.get('price', 0)
     time = data.get('time', 'N/A')
     
-    # إذا كان exit_price = entry_price، استخدم tp3 كقيمة
-    if exit_price and entry_price and float(exit_price) == float(entry_price) and tp3:
-        exit_price = tp3
+    # تحسين: إذا كان exit_price = entry_price، استخدم tp3
+    if exit_price and entry_price:
+        try:
+            if abs(float(exit_price) - float(entry_price)) < 0.01:
+                if tp3:
+                    exit_price = tp3
+                    logger.info(f"✅ TP3 Hit: تم استخدام TP3 كسعر خروج لأن exit_price = entry_price")
+        except (ValueError, TypeError):
+            pass
     
     message = f"🎯✅ <b>تم ضرب الهدف الثالث (TP3)</b> ✅🎯\n\n"
     message += f"📊 الرمز: {escape_html(symbol)}\n"
-    if entry_price:
-        message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+    
+    # عرض سعر الدخول فقط إذا كان مختلفاً عن سعر الخروج
+    if entry_price and exit_price:
+        try:
+            if abs(float(entry_price) - float(exit_price)) > 0.01:
+                message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+        except (ValueError, TypeError):
+            message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+    
     message += f"💰 سعر الخروج: <code>{format_price(exit_price)}</code>\n"
+    
     if tp3:
         message += f"🎯 TP3: <code>{format_price(float(tp3))}</code>\n"
+    
     message += f"⏰ الوقت: {escape_html(time)}"
     
     return message
@@ -436,20 +481,35 @@ def format_stop_loss_hit(data: dict) -> str:
     symbol = data.get('symbol', 'N/A')
     entry_price = data.get('entry_price', 0)
     stop_loss = data.get('stop_loss')
-    exit_price = data.get('exit_price') or stop_loss or data.get('price', 0)
+    exit_price = data.get('exit_price') or data.get('price', 0)
     time = data.get('time', 'N/A')
     
-    # إذا كان exit_price = entry_price، استخدم stop_loss كقيمة
-    if exit_price and entry_price and float(exit_price) == float(entry_price) and stop_loss:
-        exit_price = stop_loss
+    # تحسين: إذا كان exit_price = entry_price، استخدم stop_loss
+    if exit_price and entry_price:
+        try:
+            if abs(float(exit_price) - float(entry_price)) < 0.01:
+                if stop_loss:
+                    exit_price = stop_loss
+                    logger.info(f"✅ SL Hit: تم استخدام SL كسعر خروج لأن exit_price = entry_price")
+        except (ValueError, TypeError):
+            pass
     
     message = f"🛑😔 <b>تم ضرب وقف الخسارة (Stop Loss)</b> 😔🛑\n\n"
     message += f"📊 الرمز: {escape_html(symbol)}\n"
-    if entry_price:
-        message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+    
+    # عرض سعر الدخول فقط إذا كان مختلفاً عن سعر الخروج
+    if entry_price and exit_price:
+        try:
+            if abs(float(entry_price) - float(exit_price)) > 0.01:
+                message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+        except (ValueError, TypeError):
+            message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+    
     message += f"💰 سعر الخروج: <code>{format_price(exit_price)}</code>\n"
+    
     if stop_loss:
         message += f"🛑 Stop Loss: <code>{format_price(float(stop_loss))}</code>\n"
+    
     message += f"⏰ الوقت: {escape_html(time)}"
     
     return message
