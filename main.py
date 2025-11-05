@@ -611,117 +611,64 @@ def webhook(chat_id=None):
                 # Strip whitespace before/after JSON (TradingView might add extra spaces)
                 raw_data_cleaned = raw_data.strip()
                 
-                # Try to extract JSON if it's mixed with strategy default message
-                # Strategy default message format: "text: JSON" or "text\nJSON" or "text JSON"
-                # Look for JSON pattern: starts with { and ends with }
-                json_match = None
-                import re as json_re
-                
-                # Check if text contains strategy default message pattern
-                has_strategy_message = "{{strategy.order.action}}" in raw_data_cleaned or "strategy.order" in raw_data_cleaned or "المركز الجديدة" in raw_data_cleaned
-                
-                if has_strategy_message:
-                    logger.warning("⚠️ TradingView default strategy message detected - trying to extract JSON...")
-                    # Strategy message format: "text: JSON" or text followed by JSON
-                    # Try to find JSON object after the strategy message
-                    # Look for pattern: "text" followed by JSON starting with {
-                    json_match = json_re.search(r'\{[^{}]*"signal"[^{}]*\{[^{}]*\}[^{}]*\}', raw_data_cleaned, json_re.DOTALL)
-                    if not json_match:
-                        # Try to find any JSON object with "signal" key
-                        json_match = json_re.search(r'\{.*?"signal".*?\}', raw_data_cleaned, json_re.DOTALL)
-                    if not json_match:
-                        # Try to find JSON object by matching braces
-                        # Find the last complete JSON object in the text
-                        brace_count = 0
-                        start_pos = -1
-                        for i, char in enumerate(raw_data_cleaned):
-                            if char == '{':
-                                if brace_count == 0:
-                                    start_pos = i
-                                brace_count += 1
-                            elif char == '}':
-                                brace_count -= 1
-                                if brace_count == 0 and start_pos != -1:
-                                    potential_json = raw_data_cleaned[start_pos:i+1]
-                                    if '"signal"' in potential_json:
-                                        json_match = json_re.search(r'\{.*"signal".*\}', potential_json, json_re.DOTALL)
-                                        if json_match:
-                                            break
-                
-                # If no strategy message, try simple JSON extraction
-                if not json_match:
-                    # Try to find JSON object with "signal" key
-                    json_match = json_re.search(r'\{[^{}]*"signal"[^{}]*\}', raw_data_cleaned, json_re.DOTALL)
-                if not json_match:
-                    # Try to find complete JSON object by matching braces
-                    # Start from the last { and find matching }
-                    brace_start = raw_data_cleaned.rfind('{')
-                    if brace_start != -1:
-                        brace_count = 0
-                        for i in range(brace_start, len(raw_data_cleaned)):
-                            if raw_data_cleaned[i] == '{':
-                                brace_count += 1
-                            elif raw_data_cleaned[i] == '}':
-                                brace_count -= 1
-                                if brace_count == 0:
-                                    potential_json = raw_data_cleaned[brace_start:i+1]
-                                    if '"signal"' in potential_json:
-                                        # Use the complete JSON string directly
-                                        json_match = type('Match', (), {'group': lambda x: potential_json})()
-                                        break
-                if not json_match:
-                    # Try more flexible pattern - find JSON that starts with { and ends with }
-                    # Look for JSON object that contains "signal" and is properly closed
-                    json_match = json_re.search(r'\{.*?"signal".*?\}', raw_data_cleaned, json_re.DOTALL)
-                
-                if json_match:
-                    json_str = json_match.group(0)
+                # ═══════════════════════════════════════════════════════════════════════
+                # 🔧 استخراج JSON كامل مباشرة (بدون regex أولاً)
+                # ═══════════════════════════════════════════════════════════════════════
+                # المشكلة: regex يجد فقط جزء صغير (مثل {"signal":{{plot_22}})
+                # الحل: نستخدم منطق استخراج JSON الكامل مباشرة
+                json_str = None
+                json_start = raw_data_cleaned.find('{')
+                if json_start != -1:
+                    # ابحث عن آخر } المتطابق (بحساب الأقواس)
+                    brace_count = 0
+                    json_end = -1
+                    for i in range(json_start, len(raw_data_cleaned)):
+                        if raw_data_cleaned[i] == '{':
+                            brace_count += 1
+                        elif raw_data_cleaned[i] == '}':
+                            brace_count -= 1
+                            if brace_count == 0:
+                                json_end = i + 1
+                                break
                     
-                    # ═══════════════════════════════════════════════════════════════════════
-                    # 🔧 إصلاح: استخراج JSON كامل من النص (ليس فقط جزء)
-                    # ═══════════════════════════════════════════════════════════════════════
-                    # المشكلة: regex قد يجد فقط جزء صغير (مثل {{plot_22}})
-                    # الحل: البحث عن JSON كامل من أول { إلى آخر }
-                    if json_str.startswith('{{') or len(json_str) < 20:
-                        # إذا كان النتيجة صغيرة جداً أو تبدأ بـ {{، نحتاج للبحث عن JSON كامل
-                        # ابحث عن أول { في النص
-                        json_start = raw_data_cleaned.find('{')
-                        if json_start != -1:
-                            # ابحث عن آخر } المتطابق
+                    if json_end > json_start:
+                        json_str = raw_data_cleaned[json_start:json_end]
+                        # التحقق من أن JSON يحتوي على "signal"
+                        if '"signal"' in json_str:
+                            logger.info(f"✅ Extracted complete JSON from text (length: {len(json_str)} chars)")
+                        else:
+                            logger.warning(f"⚠️ Extracted JSON does not contain 'signal' key")
+                            json_str = None
+                    else:
+                        logger.warning(f"⚠️ Could not find complete JSON - brace_count={brace_count}, json_start={json_start}")
+                else:
+                    logger.warning(f"⚠️ No opening brace found in text")
+                
+                # إذا فشل الاستخراج المباشر، جرب regex
+                if not json_str:
+                    # Try to find JSON object with "signal" key using regex
+                    json_match = json_re.search(r'\{[^{}]*"signal"[^{}]*\}', raw_data_cleaned, json_re.DOTALL)
+                    if not json_match:
+                        # Try to find complete JSON object by matching braces
+                        brace_start = raw_data_cleaned.rfind('{')
+                        if brace_start != -1:
                             brace_count = 0
-                            json_end = -1
-                            for i in range(json_start, len(raw_data_cleaned)):
+                            for i in range(brace_start, len(raw_data_cleaned)):
                                 if raw_data_cleaned[i] == '{':
                                     brace_count += 1
                                 elif raw_data_cleaned[i] == '}':
                                     brace_count -= 1
                                     if brace_count == 0:
-                                        json_end = i + 1
-                                        break
-                            if json_end > json_start:
-                                json_str = raw_data_cleaned[json_start:json_end]
-                                logger.info(f"✅ Extracted complete JSON from text (length: {len(json_str)} chars)")
-                    
-                    # Clean JSON: Remove any text before the first {
-                    # This handles cases where regex matched text before JSON
-                    if '{' in json_str:
-                        json_start = json_str.find('{')
-                        json_str = json_str[json_start:]
-                        # Also ensure we have complete JSON by finding matching closing brace
-                        brace_count = 0
-                        json_end = -1
-                        for i, char in enumerate(json_str):
-                            if char == '{':
-                                brace_count += 1
-                            elif char == '}':
-                                brace_count -= 1
-                                if brace_count == 0:
-                                    json_end = i + 1
-                                    break
-                        if json_end > 0:
-                            json_str = json_str[:json_end]
-                    
-                    logger.info(f"Found JSON in text (length: {len(json_str)} chars): {json_str[:200]}...")
+                                        potential_json = raw_data_cleaned[brace_start:i+1]
+                                        if '"signal"' in potential_json:
+                                            json_str = potential_json
+                                            logger.info(f"✅ Extracted JSON using brace matching (length: {len(json_str)} chars)")
+                                            break
+                    elif json_match:
+                        json_str = json_match.group(0)
+                
+                if json_str:
+                    logger.info(f"JSON string to parse (first 200 chars): {json_str[:200]}...")
                     
                     # Fix: Replace TradingView plot placeholders with actual values or extract them
                     # Handle cases where {{plot_22}} or {{plot("Signal Type Code")}} weren't replaced
