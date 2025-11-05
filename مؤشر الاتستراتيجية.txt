@@ -24,32 +24,6 @@ setupType = input.string('Open/Close', title='What Trading Setup should be taken
 scolor = input(true, title='Show coloured Bars to indicate Trend?')
 almaRibbon = input(false, title='Enable Ribbon?')
 //tradeType = input.string('BOTH', title='What trades should be taken : ', options=['LONG', 'SHORT', 'BOTH', 'NONE'])
-
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔔 إعدادات التنبيهات المخصصة - Custom Alert Settings
-// ═══════════════════════════════════════════════════════════════════════════
-alertGroup = "🔔 إعدادات التنبيهات (Alert Settings)"
-
-// تفعيل/إلغاء التنبيهات
-enableLongAlert = input.bool(true, "تفعيل تنبيه LONG", group=alertGroup, inline="1")
-enableShortAlert = input.bool(true, "تفعيل تنبيه SHORT", group=alertGroup, inline="1")
-enableLongReverseAlert = input.bool(true, "تفعيل تنبيه LONG REVERSE", group=alertGroup, inline="2")
-enableShortReverseAlert = input.bool(true, "تفعيل تنبيه SHORT REVERSE", group=alertGroup, inline="2")
-enableTP1Alert = input.bool(true, "تفعيل تنبيه TP1", group=alertGroup, inline="3")
-enableTP2Alert = input.bool(true, "تفعيل تنبيه TP2", group=alertGroup, inline="3")
-enableTP3Alert = input.bool(true, "تفعيل تنبيه TP3", group=alertGroup, inline="4")
-enableSLAlert = input.bool(true, "تفعيل تنبيه Stop Loss", group=alertGroup, inline="4")
-
-// رسائل التنبيهات المخصصة (يمكن تخصيصها)
-customLongMsg = input.string("LONG Entry Signal - Price: {{close}}", "رسالة LONG المخصصة", group=alertGroup)
-customShortMsg = input.string("SHORT Entry Signal - Price: {{close}}", "رسالة SHORT المخصصة", group=alertGroup)
-customLongReverseMsg = input.string("LONG REVERSE Entry Signal (Position Reversed) - Price: {{close}}", "رسالة LONG REVERSE المخصصة", group=alertGroup)
-customShortReverseMsg = input.string("SHORT REVERSE Entry Signal (Position Reversed) - Price: {{close}}", "رسالة SHORT REVERSE المخصصة", group=alertGroup)
-customTP1Msg = input.string("TP1 Target Reached - Price: {{close}}", "رسالة TP1 المخصصة", group=alertGroup)
-customTP2Msg = input.string("TP2 Target Reached - Price: {{close}}", "رسالة TP2 المخصصة", group=alertGroup)
-customTP3Msg = input.string("TP3 Target Reached - Price: {{close}}", "رسالة TP3 المخصصة", group=alertGroup)
-customSLMsg = input.string("Stop Loss Hit - Price: {{close}}", "رسالة Stop Loss المخصصة", group=alertGroup)
-
 // === /INPUTS ===
 
 // Display the probabilities in a table
@@ -766,7 +740,7 @@ if timeframe.in_seconds() > timeframe.in_seconds("D")
 
 
 // Global Dashboard Variables
-// ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+// ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 // Dashboard Table Text Size
 i_tableTextSize = "Normal" //input.string(title="Dashboard Size", defval="Normal", options=["Auto",  "Huge",  "Large", "Normal", "Small", "Tiny"], group="Dashboards")
@@ -781,7 +755,7 @@ table_text_size(s) =>
 tableTextSize = table_text_size(i_tableTextSize)
 
 // Monthly Table Performance Dashboard By @QuantNomad
-// ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+// ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 i_showMonthlyPerformance = input.bool(false, 'Monthly Performance', group='Dashboards', inline="Show Dashboards")
 i_monthlyReturnPercision = 2
 
@@ -979,104 +953,16 @@ plot( showAtr ? DemaAtr : na,  "ATR",  color=Trendcolor,  linewidth = 2 )
 // ==========================================================================================
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 🔔 ALERT CONDITIONS - شروط التنبيهات المخصصة
+// 🔔 ALERT CONDITIONS - شروط التنبيهات
 // ═══════════════════════════════════════════════════════════════════════════
 // يمكن استخدام هذه الشروط في Create Alert في TradingView
 // You can use these conditions in Create Alert in TradingView
-// 
-// ⚠️ ملاحظة مهمة جداً:
-// كل إشارة ترسل تنبيهها الخاص بشكل منفصل تماماً:
-// - عندما تأتي إشارة LONG → يرسل تنبيه LONG فقط (إذا كان مفعّل)
-// - عندما تأتي إشارة SHORT → يرسل تنبيه SHORT فقط (إذا كان مفعّل)
-// - عندما يصل السعر لـ TP1 → يرسل تنبيه TP1 فقط (إذا كان مفعّل)
-// - وهكذا لكل إشارة...
-//
-// ⚠️ Important Note:
-// Each signal sends its own separate alert:
-// - When LONG signal appears → sends LONG alert only (if enabled)
-// - When SHORT signal appears → sends SHORT alert only (if enabled)
-// - When price reaches TP1 → sends TP1 alert only (if enabled)
-// - And so on for each signal...
-//
-// كيفية الاستخدام:
-// 1. في TradingView: أنشئ تنبيه جديد (Create Alert)
-// 2. اختر الشرط المناسب من القائمة (LONG Signal, SHORT Signal, etc.)
-// 3. فعّل/ألغِ التنبيهات التي تريدها من إعدادات المؤشر
-// 4. خصص رسالة كل تنبيه من إعدادات المؤشر
-//
-// How to Use:
-// 1. In TradingView: Create a new alert
-// 2. Select the appropriate condition from the list (LONG Signal, SHORT Signal, etc.)
-// 3. Enable/disable alerts from indicator settings
-// 4. Customize each alert message from indicator settings
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔔 التنبيهات الفردية (8 تنبيهات منفصلة - كل إشارة ترسل تنبيهها الخاص)
-// ═══════════════════════════════════════════════════════════════════════════
-// Individual Alerts (8 separate alerts - each signal sends its own alert)
-// 
-// ⚠️ ملاحظة: رسائل التنبيهات ثابتة بسبب قيود Pine Script
-// يمكنك تخصيص رسائل التنبيهات من الإعدادات (customLongMsg, customShortMsg, etc.)
-// ولكن الرسائل الفعلية في alertcondition ثابتة - يمكنك تعديلها يدوياً في الكود هنا
-//
-// Note: Alert messages are fixed due to Pine Script limitations
-// You can customize alert messages from settings (customLongMsg, customShortMsg, etc.)
-// But the actual messages in alertcondition are fixed - you can modify them manually in the code here
-
-// تنبيه إشارة الشراء (LONG) - يُرسل فقط عند ظهور إشارة الشراء
-alertcondition(enableLongAlert and longE, title='🟢 LONG Signal', message='LONG Entry Signal - Price: {{close}}')
-
-// تنبيه إشارة البيع (SHORT) - يُرسل فقط عند ظهور إشارة البيع
-alertcondition(enableShortAlert and shortE, title='🔴 SHORT Signal', message='SHORT Entry Signal - Price: {{close}}')
-
-// تنبيه إشارة الشراء العكسي (LONG REVERSE) - يُرسل فقط عند عكس صفقة Short
-alertcondition(enableLongReverseAlert and longE_Reverse, title='🟠 LONG REVERSE Signal', message='LONG REVERSE Entry Signal (Position Reversed) - Price: {{close}}')
-
-// تنبيه إشارة البيع العكسي (SHORT REVERSE) - يُرسل فقط عند عكس صفقة Long
-alertcondition(enableShortReverseAlert and shortE_Reverse, title='🟠 SHORT REVERSE Signal', message='SHORT REVERSE Entry Signal (Position Reversed) - Price: {{close}}')
-
-// تنبيه الوصول لـ TP1 - يُرسل فقط عند وصول السعر لـ TP1 (Long أو Short)
-alertcondition(enableTP1Alert and (longTP1 or shortTP1), title='🎯 TP1 Hit', message='TP1 Target Reached - Price: {{close}}')
-
-// تنبيه الوصول لـ TP2 - يُرسل فقط عند وصول السعر لـ TP2 (Long أو Short)
-alertcondition(enableTP2Alert and (longTP2 or shortTP2), title='🎯 TP2 Hit', message='TP2 Target Reached - Price: {{close}}')
-
-// تنبيه الوصول لـ TP3 - يُرسل فقط عند وصول السعر لـ TP3 (Long أو Short)
-alertcondition(enableTP3Alert and (longTP3 or shortTP3), title='🎯 TP3 Hit', message='TP3 Target Reached - Price: {{close}}')
-
-// تنبيه Stop Loss - يُرسل فقط عند ضرب Stop Loss (Long أو Short)
-alertcondition(enableSLAlert and (longSL or shortSL), title='🛑 Stop Loss', message='Stop Loss Hit - Price: {{close}}')
-
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔔 تنبيه مركزي واحد (اختياري - للاستخدام عند تجاوز حد 8 تنبيهات)
-// ═══════════════════════════════════════════════════════════════════════════
-// ⚠️ ملاحظة: هذا التنبيه المركزي اختياري
-// التنبيهات الفردية أعلاه (8 تنبيهات) هي الأساسية وكل منها يعمل بشكل منفصل
-// 
-// التنبيه المركزي يجمع جميع الإشارات في تنبيه واحد
-// استخدمه فقط إذا كنت تريد تنبيه واحد لجميع الإشارات بدلاً من 8 تنبيهات منفصلة
-// 
-// ⚠️ Note: This Central Alert is optional
-// The individual alerts above (8 alerts) are the main ones and each works separately
-// 
-// Central Alert combines all signals into one alert
-// Use it only if you want one alert for all signals instead of 8 separate alerts
-// 
-// ملاحظة: في رسالة التنبيه المركزي، يمكنك استخدام:
-// {{ticker}} - اسم الرمز | {{close}} - سعر الإغلاق | {{time}} - الوقت | {{volume}} - الحجم
-// 
-// Note: In the central alert message, you can use:
-// {{ticker}} - Symbol name | {{close}} - Close price | {{time}} - Time | {{volume}} - Volume
-
-// تحديد نوع الإشارة الحالية (يتم استخدامه في التنبيه المركزي)
-// تحديد ما إذا كانت أي إشارة مفعّلة قد تم تفعيلها
-anyAlertTriggered = (enableLongAlert and longE) or (enableShortAlert and shortE) or (enableLongReverseAlert and longE_Reverse) or (enableShortReverseAlert and shortE_Reverse) or (enableTP1Alert and (longTP1 or shortTP1)) or (enableTP2Alert and (longTP2 or shortTP2)) or (enableTP3Alert and (longTP3 or shortTP3)) or (enableSLAlert and (longSL or shortSL))
-
-// التنبيه المركزي (اختياري - استخدمه إذا كنت تريد تنبيه واحد لجميع الإشارات)
-// ملاحظة: رسالة التنبيه المركزي ثابتة لأن Pine Script لا يدعم رسائل ديناميكية في alertcondition
-// يمكنك تخصيص الرسالة من الإعدادات (centralAlertMsg) ولكنها ستظهر في نص التنبيه الافتراضي
-// 
-// Central Alert (optional - use if you want one alert for all signals)
-// Note: Central alert message is fixed because Pine Script doesn't support dynamic messages in alertcondition
-// You can customize the message from settings (centralAlertMsg) but it will show in the default alert text
-alertcondition(anyAlertTriggered, title='🔔 Central Alert (All Signals)', message='Alert: {{ticker}} | Signal detected at {{close}} | Time: {{time}}')
+alertcondition(longE, title='🟢 LONG Signal', message='LONG Entry Signal - Price: {{close}}')
+alertcondition(shortE, title='🔴 SHORT Signal', message='SHORT Entry Signal - Price: {{close}}')
+alertcondition(longE_Reverse, title='🟠 LONG REVERSE Signal', message='LONG REVERSE Entry Signal (Position Reversed) - Price: {{close}}')
+alertcondition(shortE_Reverse, title='🟠 SHORT REVERSE Signal', message='SHORT REVERSE Entry Signal (Position Reversed) - Price: {{close}}')
+alertcondition(longTP1 or shortTP1, title='🎯 TP1 Hit', message='TP1 Target Reached - Price: {{close}}')
+alertcondition(longTP2 or shortTP2, title='🎯 TP2 Hit', message='TP2 Target Reached - Price: {{close}}')
+alertcondition(longTP3 or shortTP3, title='🎯 TP3 Hit', message='TP3 Target Reached - Price: {{close}}')
+alertcondition(longSL or shortSL, title='🛑 Stop Loss', message='Stop Loss Hit - Price: {{close}}')
