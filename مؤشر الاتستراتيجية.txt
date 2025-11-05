@@ -476,19 +476,10 @@ p_slLine     = plot (  condition ==  1.0 or  condition == -1.0 or    condition =
 fill(  p_entryLine, p_slLine,  color      = leTrigger or seTrigger ? na :color.new(color.red, 90))
 
 //<alerts labels>
-// ═══════════════════════════════════════════════════════════════════════════
-// 📊 إظهار الإشارات على الشارت (Visual Signals on Chart)
-// ═══════════════════════════════════════════════════════════════════════════
-// ملاحظة: تم إخفاء إشارات BUY/SELL العادية - تظهر فقط REVERSE signals
-// Note: Regular BUY/SELL signals are hidden - only REVERSE signals are shown
-
-// إشارات REVERSE فقط (Long Reverse و Short Reverse)
+plotshape(  i_alertOn and longE and not longE_Reverse,  title      = 'Long',  text       = 'Long',  textcolor  = color.white,  color      = color.green,  style      = shape.labelup,  size       = size.tiny,  location   = location.belowbar)
+plotshape(  i_alertOn and shortE and not shortE_Reverse,  title      = 'Short',  text       = 'Short',  textcolor  = color.white,  color      = color.red,  style      = shape.labeldown,  size       = size.tiny,  location   = location.abovebar)
 plotshape(  i_alertOn and longE_Reverse,  title      = 'Long Reverse',  text       = 'Long Rev',  textcolor  = color.white,  color      = color.orange,  style      = shape.labelup,  size       = size.tiny,  location   = location.belowbar)
 plotshape(  i_alertOn and shortE_Reverse,  title      = 'Short Reverse',  text       = 'Short Rev',  textcolor  = color.white,  color      = color.orange,  style      = shape.labeldown,  size       = size.tiny,  location   = location.abovebar)
-
-// إشارات BUY/SELL العادية - معطلة (غير مرئية على الشارت)
-// plotshape(  i_alertOn and longE and not longE_Reverse,  title      = 'Long',  text       = 'Long',  textcolor  = color.white,  color      = color.green,  style      = shape.labelup,  size       = size.tiny,  location   = location.belowbar)
-// plotshape(  i_alertOn and shortE and not shortE_Reverse,  title      = 'Short',  text       = 'Short',  textcolor  = color.white,  color      = color.red,  style      = shape.labeldown,  size       = size.tiny,  location   = location.abovebar)
 plotshape(  i_alertOn and (longX or shortX) and not longE_Reverse and not shortE_Reverse ? close : na,  title      = 'Close',  text       = 'Close',  textcolor  = color.white,  color      = color.gray,  style      = shape.labelup,  size       = size.tiny,  location   = location.absolute)
 l_tp         = i_alertOn and (longTP1 or shortTP1) ? close : na
 
@@ -1032,45 +1023,29 @@ plot( showAtr ? DemaAtr : na,  "ATR",  color=Trendcolor,  linewidth = 2 )
 // You can customize alert messages from settings (customLongMsg, customShortMsg, etc.)
 // But the actual messages in alertcondition are fixed - you can modify them manually in the code here
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔔 التنبيهات الفردية (Individual Alerts) - 8 تنبيهات منفصلة
-// ═══════════════════════════════════════════════════════════════════════════
-// ✅ 8 تنبيهات منفصلة - كل واحد يرسل إشارة واحدة فقط
-// ✅ 8 separate alerts - each sends one signal type only
-//
-// 📌 استخدام التنبيهات المنفصلة:
-// - إذا أردت تنبيه منفصل لكل نوع إشارة (8 تنبيهات)
-// - كل تنبيه يعمل بشكل مستقل
-// - يمكنك تفعيل/تعطيل كل تنبيه على حدة
-//
-// 📌 Using Individual Alerts:
-// - If you want separate alerts for each signal type (8 alerts)
-// - Each alert works independently
-// - You can enable/disable each alert separately
+// تنبيه إشارة الشراء (LONG) - يُرسل فقط عند ظهور إشارة الشراء
+alertcondition(enableLongAlert and longE, title='🟢 LONG Signal', message='LONG Entry Signal - Price: {{close}}')
 
-// تنبيه إشارة الشراء (LONG/BUY) - إشارة الشراء العادية
-alertcondition(enableLongAlert and longE, title='🟢 LONG Signal (BUY)', message='SIGNAL:BUY|SYMBOL:{{ticker}}|PRICE:{{close}}|TIME:{{time}}|TF:{{interval}}')
+// تنبيه إشارة البيع (SHORT) - يُرسل فقط عند ظهور إشارة البيع
+alertcondition(enableShortAlert and shortE, title='🔴 SHORT Signal', message='SHORT Entry Signal - Price: {{close}}')
 
-// تنبيه إشارة البيع (SHORT/SELL) - إشارة البيع العادية
-alertcondition(enableShortAlert and shortE, title='🔴 SHORT Signal (SELL)', message='SIGNAL:SELL|SYMBOL:{{ticker}}|PRICE:{{close}}|TIME:{{time}}|TF:{{interval}}')
+// تنبيه إشارة الشراء العكسي (LONG REVERSE) - يُرسل فقط عند عكس صفقة Short
+alertcondition(enableLongReverseAlert and longE_Reverse, title='🟠 LONG REVERSE Signal', message='LONG REVERSE Entry Signal (Position Reversed) - Price: {{close}}')
 
-// تنبيه إشارة الشراء العكسي (LONG REVERSE/BUY_REVERSE) - يُرسل فقط عند عكس صفقة Short
-alertcondition(enableLongReverseAlert and longE_Reverse, title='🟠 LONG REVERSE Signal (BUY_REVERSE)', message='SIGNAL:BUY_REVERSE|SYMBOL:{{ticker}}|PRICE:{{close}}|TIME:{{time}}|TF:{{interval}}')
-
-// تنبيه إشارة البيع العكسي (SHORT REVERSE/SELL_REVERSE) - يُرسل فقط عند عكس صفقة Long
-alertcondition(enableShortReverseAlert and shortE_Reverse, title='🟠 SHORT REVERSE Signal (SELL_REVERSE)', message='SIGNAL:SELL_REVERSE|SYMBOL:{{ticker}}|PRICE:{{close}}|TIME:{{time}}|TF:{{interval}}')
+// تنبيه إشارة البيع العكسي (SHORT REVERSE) - يُرسل فقط عند عكس صفقة Long
+alertcondition(enableShortReverseAlert and shortE_Reverse, title='🟠 SHORT REVERSE Signal', message='SHORT REVERSE Entry Signal (Position Reversed) - Price: {{close}}')
 
 // تنبيه الوصول لـ TP1 - يُرسل فقط عند وصول السعر لـ TP1 (Long أو Short)
-alertcondition(enableTP1Alert and (longTP1 or shortTP1), title='🎯 TP1 Hit', message='SIGNAL:TP1_HIT|SYMBOL:{{ticker}}|PRICE:{{close}}|TIME:{{time}}|TF:{{interval}}')
+alertcondition(enableTP1Alert and (longTP1 or shortTP1), title='🎯 TP1 Hit', message='TP1 Target Reached - Price: {{close}}')
 
 // تنبيه الوصول لـ TP2 - يُرسل فقط عند وصول السعر لـ TP2 (Long أو Short)
-alertcondition(enableTP2Alert and (longTP2 or shortTP2), title='🎯 TP2 Hit', message='SIGNAL:TP2_HIT|SYMBOL:{{ticker}}|PRICE:{{close}}|TIME:{{time}}|TF:{{interval}}')
+alertcondition(enableTP2Alert and (longTP2 or shortTP2), title='🎯 TP2 Hit', message='TP2 Target Reached - Price: {{close}}')
 
 // تنبيه الوصول لـ TP3 - يُرسل فقط عند وصول السعر لـ TP3 (Long أو Short)
-alertcondition(enableTP3Alert and (longTP3 or shortTP3), title='🎯 TP3 Hit', message='SIGNAL:TP3_HIT|SYMBOL:{{ticker}}|PRICE:{{close}}|TIME:{{time}}|TF:{{interval}}')
+alertcondition(enableTP3Alert and (longTP3 or shortTP3), title='🎯 TP3 Hit', message='TP3 Target Reached - Price: {{close}}')
 
 // تنبيه Stop Loss - يُرسل فقط عند ضرب Stop Loss (Long أو Short)
-alertcondition(enableSLAlert and (longSL or shortSL), title='🛑 Stop Loss', message='SIGNAL:STOP_LOSS|SYMBOL:{{ticker}}|PRICE:{{close}}|TIME:{{time}}|TF:{{interval}}')
+alertcondition(enableSLAlert and (longSL or shortSL), title='🛑 Stop Loss', message='Stop Loss Hit - Price: {{close}}')
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🔔 تنبيه مركزي واحد (اختياري - للاستخدام عند تجاوز حد 8 تنبيهات)
@@ -1097,128 +1072,11 @@ alertcondition(enableSLAlert and (longSL or shortSL), title='🛑 Stop Loss', me
 // تحديد ما إذا كانت أي إشارة مفعّلة قد تم تفعيلها
 anyAlertTriggered = (enableLongAlert and longE) or (enableShortAlert and shortE) or (enableLongReverseAlert and longE_Reverse) or (enableShortReverseAlert and shortE_Reverse) or (enableTP1Alert and (longTP1 or shortTP1)) or (enableTP2Alert and (longTP2 or shortTP2)) or (enableTP3Alert and (longTP3 or shortTP3)) or (enableSLAlert and (longSL or shortSL))
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔔 التنبيه المركزي الذكي - تنبيه واحد لجميع الإشارات (8 أنواع)
-// ═══════════════════════════════════════════════════════════════════════════
-// ✅ تنبيه واحد فقط يحدد نوع الإشارة تلقائياً وي sends رسالة منفصلة لكل نوع
-// ✅ Smart Central Alert - One alert that auto-detects signal type and sends separate messages
-//
-// 📌 الفرق بين التنبيهات المنفصلة والتنبيه المركزي:
-// - التنبيهات المنفصلة: 8 تنبيهات منفصلة (كل واحد لإشارة واحدة)
-// - التنبيه المركزي: تنبيه واحد فقط يرسل رسائل منفصلة لكل نوع إشارة (8 أنواع)
-//
-// 📌 الفرق في الاستخدام:
-// - التنبيهات المنفصلة: أنشئ 8 تنبيهات في TradingView (واحد لكل نوع)
-// - التنبيه المركزي: أنشئ تنبيه واحد فقط، وسيرسل رسائل منفصلة لكل نوع تلقائياً
-//
-// 📌 كيف يعمل التنبيه المركزي:
-// 1. عندما تظهر أي إشارة على الشارت (BUY, SELL, REVERSE, TP, SL)
-// 2. المؤشر يحدد نوع الإشارة تلقائياً باستخدام رقم (1-8)
-// 3. التنبيه يرسل هذا الرقم مع البيانات الأخرى
-// 4. المشروع (main.py) يقرأ الرقم ويحوله إلى اسم الإشارة
-// 5. المشروع يرسل الرسالة المناسبة (منفصلة) إلى Telegram لكل نوع إشارة
-//
-// 📌 كيفية الاستخدام:
-// 1. في TradingView، ابحث عن "🔔 Smart Central Alert - All Signals"
-// 2. اختر هذا التنبيه الواحد فقط
-// 3. في Message field، استخدم JSON format (انظر أدناه)
-// 4. سيرسل رسائل منفصلة لكل نوع إشارة (BUY, SELL, REVERSE, TP1, TP2, TP3, SL)
-//
-// 📌 How to use:
-// 1. In TradingView, search for "🔔 Smart Central Alert - All Signals"
-// 2. Select this single alert only
-// 3. In Message field, use JSON format (see below)
-// 4. It will send separate messages for each signal type (BUY, SELL, REVERSE, TP1, TP2, TP3, SL)
-
-// تحديد نوع الإشارة باستخدام رقم (Signal Type Code)
-// يتم تحديده بناءً على الإشارات التي تظهر على الشارت في كل شمعة
-// 1 = BUY, 2 = SELL, 3 = BUY_REVERSE, 4 = SELL_REVERSE, 5 = TP1, 6 = TP2, 7 = TP3, 8 = STOP_LOSS
-//
-// ⚠️ ملاحظة: في أي شمعة معينة، لن تكون هناك إلا إشارة واحدة فقط
-// لذلك يتم التحقق من الإشارات بالترتيب التالي:
-// - REVERSE أولاً (لأنه قد يحدث مع إشارات أخرى)
-// - ثم Entry signals (BUY/SELL)
-// - ثم TP signals (TP1, TP2, TP3)
-// - ثم Stop Loss
-// تحديد نوع الإشارة باستخدام ternary operator (متوافق مع Pine Script)
-// التحقق من REVERSE أولاً (لأنه قد يحدث مع إشارات أخرى)
-// ثم Entry signals العادية
-// ثم TP signals (من الأكبر إلى الأصغر)
-// ثم Stop Loss
-signalTypeCode = (enableLongReverseAlert and longE_Reverse) ? 3 : (enableShortReverseAlert and shortE_Reverse) ? 4 : (enableLongAlert and longE) ? 1 : (enableShortAlert and shortE) ? 2 : (enableTP3Alert and (longTP3 or shortTP3)) ? 7 : (enableTP2Alert and (longTP2 or shortTP2)) ? 6 : (enableTP1Alert and (longTP1 or shortTP1)) ? 5 : (enableSLAlert and (longSL or shortSL)) ? 8 : 0
-
-// Plot للـ Signal Type Code (للاستخدام في التنبيه)
-// نستخدم plot value مباشرة في alertcondition
-// هذا الرقم يحدد نوع الإشارة التي ظهرت على الشارت
-p_signalTypeCode = plot(signalTypeCode > 0 ? signalTypeCode : na, title="Signal Type Code", display=display.none)
-
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔔 التنبيه المركزي الواحد المحسّن - يعمل بشكل موثوق 100%
-// ═══════════════════════════════════════════════════════════════════════════
-// ✅ تنبيه واحد فقط لجميع الإشارات (8 أنواع)
-// ✅ يستخدم كلمات مباشرة بدلاً من SIGNAL_CODE (لا يعتمد على {{plot}})
-// ✅ المشروع (main.py) يحدد REVERSE تلقائياً من نظام الذاكرة
-//
-// 📌 كيف يعمل:
-// 1. المؤشر يحدد نوع الإشارة (BUY, SELL, TP1_HIT, etc.)
-// 2. يرسل نوع الإشارة ككلمة في alertcondition message
-// 3. المشروع يقرأ نوع الإشارة من النص
-// 4. إذا كانت BUY/SELL، يستخدم نظام الذاكرة لتحديد REVERSE تلقائياً
-//
-// 📌 في TradingView Alert Message field، ضع JSON:
-// {"signal":"AUTO","symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP Line 1")}},"tp2":{{plot("TP Line 2")}},"tp3":{{plot("TP Line 3")}},"stop_loss":{{plot("SL Line")}},"time":"{{time}}","timeframe":"{{interval}}"}
-//
-// ⚠️ ملاحظة: signal في JSON = "AUTO" (سيتم تحديده من alertcondition message)
-// ⚠️ نظام الذاكرة سيتعامل مع REVERSE تلقائياً
-
-// تحديد نوع الإشارة ككلمة (بدلاً من رقم)
-signalTypeName = (enableLongReverseAlert and longE_Reverse) ? "BUY_REVERSE" : (enableShortReverseAlert and shortE_Reverse) ? "SELL_REVERSE" : (enableLongAlert and longE) ? "BUY" : (enableShortAlert and shortE) ? "SELL" : (enableTP3Alert and (longTP3 or shortTP3)) ? "TP3_HIT" : (enableTP2Alert and (longTP2 or shortTP2)) ? "TP2_HIT" : (enableTP1Alert and (longTP1 or shortTP1)) ? "TP1_HIT" : (enableSLAlert and (longSL or shortSL)) ? "STOP_LOSS" : "UNKNOWN"
-
-// التنبيه المركزي الواحد - يستخدم كلمة مباشرة (موثوق 100%)
-alertcondition(anyAlertTriggered, title='🔔 Smart Central Alert - All Signals (Reliable)', message='SIGNAL:' + signalTypeName + '|SYMBOL:{{ticker}}|PRICE:{{close}}|TIME:{{time}}|TF:{{interval}}')
-
-// ═══════════════════════════════════════════════════════════════════════════
-// 🔔 التنبيهات المركزية الفردية (اختيارية - للاستخدام إذا أردت تنبيهات منفصلة)
-// ═══════════════════════════════════════════════════════════════════════════
-// يمكنك استخدام التنبيهات الفردية أدناه إذا أردت تنبيهات منفصلة لكل نوع إشارة
-// You can use the individual alerts below if you want separate alerts for each signal type
-
-// التنبيه المركزي - BUY (إشارة الشراء)
-// alertcondition(enableLongAlert and longE, title='🔔 Central - BUY', message='SIGNAL:BUY|SYMBOL:{{ticker}}|PRICE:{{close}}|TIME:{{time}}|TF:{{interval}}')
-
-// التنبيه المركزي - SELL (إشارة البيع)
-// alertcondition(enableShortAlert and shortE, title='🔔 Central - SELL', message='SIGNAL:SELL|SYMBOL:{{ticker}}|PRICE:{{close}}|TIME:{{time}}|TF:{{interval}}')
-
-// التنبيه المركزي - BUY REVERSE (إشارة الشراء العكسية)
-// alertcondition(enableLongReverseAlert and longE_Reverse, title='🔔 Central - BUY REVERSE', message='SIGNAL:BUY_REVERSE|SYMBOL:{{ticker}}|PRICE:{{close}}|TIME:{{time}}|TF:{{interval}}')
-
-// التنبيه المركزي - SELL REVERSE (إشارة البيع العكسية)
-// alertcondition(enableShortReverseAlert and shortE_Reverse, title='🔔 Central - SELL REVERSE', message='SIGNAL:SELL_REVERSE|SYMBOL:{{ticker}}|PRICE:{{close}}|TIME:{{time}}|TF:{{interval}}')
-
-// التنبيه المركزي - TP1 (تحقيق الهدف الأول)
-// alertcondition(enableTP1Alert and (longTP1 or shortTP1), title='🔔 Central - TP1', message='SIGNAL:TP1_HIT|SYMBOL:{{ticker}}|PRICE:{{close}}|TIME:{{time}}|TF:{{interval}}')
-
-// التنبيه المركزي - TP2 (تحقيق الهدف الثاني)
-// alertcondition(enableTP2Alert and (longTP2 or shortTP2), title='🔔 Central - TP2', message='SIGNAL:TP2_HIT|SYMBOL:{{ticker}}|PRICE:{{close}}|TIME:{{time}}|TF:{{interval}}')
-
-// التنبيه المركزي - TP3 (تحقيق الهدف الثالث)
-// alertcondition(enableTP3Alert and (longTP3 or shortTP3), title='🔔 Central - TP3', message='SIGNAL:TP3_HIT|SYMBOL:{{ticker}}|PRICE:{{close}}|TIME:{{time}}|TF:{{interval}}')
-
-// التنبيه المركزي - STOP LOSS (وقف الخسارة)
-// alertcondition(enableSLAlert and (longSL or shortSL), title='🔔 Central - STOP LOSS', message='SIGNAL:STOP_LOSS|SYMBOL:{{ticker}}|PRICE:{{close}}|TIME:{{time}}|TF:{{interval}}')
-
-// ═══════════════════════════════════════════════════════════════════════════
-// ⚠️ مهم جداً: عند استخدام التنبيهات المركزية أعلاه، يجب استخدام JSON format
-// في TradingView Alert Message field للحصول على جميع البيانات (TP/SL)
-//
-// ⚠️ IMPORTANT: When using Central Alerts above, you MUST use JSON format
-// in TradingView Alert Message field to get all data (TP/SL)
-//
-// JSON Format للإشارات (Entry Signals - BUY/SELL/REVERSE):
-// {"signal":"BUY","symbol":"{{ticker}}","entry_price":{{close}},"tp1":{{plot("TP Line 1")}},"tp2":{{plot("TP Line 2")}},"tp3":{{plot("TP Line 3")}},"stop_loss":{{plot("SL Line")}},"time":"{{time}}","timeframe":"{{interval}}"}
-//
-// JSON Format للـ TP:
-// {"signal":"TP1_HIT","symbol":"{{ticker}}","entry_price":{{plot("Entry Line")}},"exit_price":{{close}},"tp1":{{plot("TP Line 1")}},"time":"{{time}}","timeframe":"{{interval}}"}
-//
-// JSON Format للـ Stop Loss:
-// {"signal":"STOP_LOSS","symbol":"{{ticker}}","price":{{close}},"time":"{{time}}","timeframe":"{{interval}}"}
+// التنبيه المركزي (اختياري - استخدمه إذا كنت تريد تنبيه واحد لجميع الإشارات)
+// ملاحظة: رسالة التنبيه المركزي ثابتة لأن Pine Script لا يدعم رسائل ديناميكية في alertcondition
+// يمكنك تخصيص الرسالة من الإعدادات (centralAlertMsg) ولكنها ستظهر في نص التنبيه الافتراضي
+// 
+// Central Alert (optional - use if you want one alert for all signals)
+// Note: Central alert message is fixed because Pine Script doesn't support dynamic messages in alertcondition
+// You can customize the message from settings (centralAlertMsg) but it will show in the default alert text
+alertcondition(anyAlertTriggered, title='🔔 Central Alert (All Signals)', message='Alert: {{ticker}} | Signal detected at {{close}} | Time: {{time}}')

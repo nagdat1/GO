@@ -40,24 +40,27 @@ recent_messages = {}
 # 🧠 نظام الذاكرة لتتبع الصفقات المفتوحة وتحديد الإشارات العكسية
 # ═══════════════════════════════════════════════════════════════════════════
 # Memory system to track open positions and detect reverse signals
-# Format: {symbol: signal_type} where signal_type is 'BUY' or 'SELL'
+# Format: {symbol: {'signal_type': 'BUY'|'SELL', 'entry_price': float, 'tp1': float, 'tp2': float, 'tp3': float, 'stop_loss': float}}
 open_positions = {}
 _open_positions_lock = threading.Lock()
 
-def get_open_position(symbol: str) -> str:
+def get_open_position(symbol: str) -> dict:
     """
-    Get the current open position type for a symbol
-    Returns: 'BUY', 'SELL', or None if no position open
+    Get the current open position data for a symbol
+    Returns: dict with 'signal_type', 'entry_price', 'tp1', 'tp2', 'tp3', 'stop_loss' or None
     """
     with _open_positions_lock:
         return open_positions.get(symbol, None)
 
-def set_open_position(symbol: str, signal_type: str):
+def set_open_position(symbol: str, signal_type: str, entry_price: float = None, tp1: float = None, tp2: float = None, tp3: float = None, stop_loss: float = None):
     """
-    Set/open a new position for a symbol
+    Set/open a new position for a symbol with TP/SL data
     Args:
         symbol: Trading symbol (e.g., 'BTCUSDT')
         signal_type: 'BUY' or 'SELL'
+        entry_price: Entry price
+        tp1, tp2, tp3: Take profit levels
+        stop_loss: Stop loss level
     """
     if signal_type not in ['BUY', 'SELL']:
         logger.warning(f"⚠️ Invalid signal type for position: {signal_type} (expected BUY or SELL)")
@@ -65,11 +68,21 @@ def set_open_position(symbol: str, signal_type: str):
     
     with _open_positions_lock:
         old_position = open_positions.get(symbol, None)
-        open_positions[symbol] = signal_type
+        open_positions[symbol] = {
+            'signal_type': signal_type,
+            'entry_price': entry_price,
+            'tp1': tp1,
+            'tp2': tp2,
+            'tp3': tp3,
+            'stop_loss': stop_loss
+        }
         if old_position:
-            logger.info(f"📝 Updated position for {symbol}: {old_position} → {signal_type}")
+            logger.info(f"📝 Updated position for {symbol}: {old_position.get('signal_type')} → {signal_type}")
         else:
             logger.info(f"📝 Opened new position for {symbol}: {signal_type}")
+        
+        if entry_price or tp1 or stop_loss:
+            logger.info(f"💾 Saved TP/SL data: entry={entry_price}, tp1={tp1}, tp2={tp2}, tp3={tp3}, sl={stop_loss}")
 
 def clear_open_position(symbol: str):
     """
@@ -80,8 +93,9 @@ def clear_open_position(symbol: str):
     with _open_positions_lock:
         if symbol in open_positions:
             old_position = open_positions[symbol]
+            old_signal_type = old_position.get('signal_type') if isinstance(old_position, dict) else old_position
             del open_positions[symbol]
-            logger.info(f"🗑️ Closed position for {symbol}: {old_position} (removed from memory)")
+            logger.info(f"🗑️ Closed position for {symbol}: {old_signal_type} (removed from memory)")
         else:
             logger.debug(f"⚠️ Attempted to clear position for {symbol} but no position found")
 
@@ -98,12 +112,14 @@ def detect_reverse_signal(symbol: str, incoming_signal: str) -> str:
         # Not an entry signal, return as-is
         return incoming_signal
     
-    current_position = get_open_position(symbol)
+    current_position_data = get_open_position(symbol)
     
-    if current_position is None:
+    if current_position_data is None:
         # No open position - this is a normal entry signal
         logger.info(f"✅ Normal {incoming_signal} signal for {symbol} (no open position)")
         return incoming_signal
+    
+    current_position = current_position_data.get('signal_type') if isinstance(current_position_data, dict) else current_position_data
     
     # Check if this is a reverse signal
     if current_position == 'BUY' and incoming_signal == 'SELL':
@@ -119,6 +135,50 @@ def detect_reverse_signal(symbol: str, incoming_signal: str) -> str:
         # but we'll treat it as a normal signal (maybe position was already closed)
         logger.warning(f"⚠️ Same direction signal for {symbol}: {current_position} → {incoming_signal} (treating as normal)")
         return incoming_signal
+
+def detect_tp_sl_from_memory(symbol: str, current_price: float) -> str:
+    """
+    Detect if current price has hit TP or SL based on saved position data
+    Args:
+        symbol: Trading symbol
+        current_price: Current price to check
+    Returns:
+        'TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_LOSS', or None
+    """
+    position_data = get_open_position(symbol)
+    if not position_data or not isinstance(position_data, dict):
+        return None
+    
+    entry_price = position_data.get('entry_price')
+    if not entry_price or entry_price <= 0:
+        return None
+    
+    tp1 = position_data.get('tp1')
+    tp2 = position_data.get('tp2')
+    tp3 = position_data.get('tp3')
+    stop_loss = position_data.get('stop_loss')
+    
+    # Calculate tolerance (0.5% of price movement)
+    tolerance = abs(current_price - entry_price) * 0.005 if entry_price > 0 else current_price * 0.005
+    
+    # Check TP3 first (farthest)
+    if tp3 and abs(current_price - tp3) <= tolerance:
+        logger.info(f"🎯 Auto-detected TP3_HIT for {symbol}: price {current_price} reached TP3 {tp3}")
+        return 'TP3_HIT'
+    # Then TP2
+    elif tp2 and abs(current_price - tp2) <= tolerance:
+        logger.info(f"🎯 Auto-detected TP2_HIT for {symbol}: price {current_price} reached TP2 {tp2}")
+        return 'TP2_HIT'
+    # Then TP1
+    elif tp1 and abs(current_price - tp1) <= tolerance:
+        logger.info(f"🎯 Auto-detected TP1_HIT for {symbol}: price {current_price} reached TP1 {tp1}")
+        return 'TP1_HIT'
+    # Then Stop Loss
+    elif stop_loss and abs(current_price - stop_loss) <= tolerance:
+        logger.info(f"🛑 Auto-detected STOP_LOSS for {symbol}: price {current_price} hit SL {stop_loss}")
+        return 'STOP_LOSS'
+    
+    return None
 
 def get_message_key(data: dict) -> str:
     """Generate a unique key for a message to detect duplicates"""
@@ -916,10 +976,10 @@ def webhook(chat_id=None):
         elif isinstance(signal, str):
             signal = signal.upper()
         
-        # Handle null signal (from JSON when {{plot_22}} was replaced with null)
-        if signal is None or signal == 'null':
+        # Handle null signal or AUTO signal (from JSON when signal is "AUTO" or null)
+        if signal is None or signal == 'null' or (isinstance(signal, str) and signal.upper() == 'AUTO'):
             signal = None
-            logger.info("⚠️ Signal is null - will detect from context or memory")
+            logger.info("⚠️ Signal is null/AUTO - will detect from context or memory")
         
         # If signal is still 0 or empty/unknown, try to detect from context
         if signal is None or signal == 0 or signal == '' or signal == 'UNKNOWN' or (isinstance(signal, str) and signal.upper() == 'UNKNOWN'):
@@ -978,12 +1038,68 @@ def webhook(chat_id=None):
         logger.info(f"Symbol: {data.get('symbol', 'N/A')}")
         
         # ═══════════════════════════════════════════════════════════════════════════
-        # 🧠 نظام الذاكرة: تحديد الإشارات العكسية تلقائياً
+        # 🧠 نظام الذاكرة: تحديد الإشارات العكسية و TP/SL تلقائياً
         # ═══════════════════════════════════════════════════════════════════════════
         symbol = data.get('symbol', '')
+        current_price = data.get('price') or data.get('close') or data.get('entry_price')
+        
         if symbol and signal:
-            # إذا كانت الإشارة BUY أو SELL، تحقق من نظام الذاكرة لتحديد REVERSE
-            if signal in ['BUY', 'SELL']:
+            # ═══════════════════════════════════════════════════════════════════════════
+            # 1. قبل تحديد REVERSE: تحقق من TP/SL المحفوظة من الإشارة السابقة
+            # ═══════════════════════════════════════════════════════════════════════════
+            # إذا كانت الإشارة BUY أو SELL، تحقق أولاً إذا كان السعر الحالي وصل لـ TP/SL
+            original_signal = signal
+            is_tp_sl_detected = False
+            
+            if signal in ['BUY', 'SELL'] and current_price and current_price > 0:
+                position_data = get_open_position(symbol)
+                if position_data and isinstance(position_data, dict):
+                    # تحقق من TP/SL من الذاكرة
+                    tp_sl_signal = detect_tp_sl_from_memory(symbol, current_price)
+                    if tp_sl_signal:
+                        # السعر الحالي وصل لـ TP/SL من الصفقة السابقة
+                        signal = tp_sl_signal
+                        data['signal'] = signal
+                        is_tp_sl_detected = True
+                        # تحديث data بالبيانات من الذاكرة
+                        if not data.get('entry_price') and position_data.get('entry_price'):
+                            data['entry_price'] = position_data.get('entry_price')
+                        if not data.get('tp1') and position_data.get('tp1'):
+                            data['tp1'] = position_data.get('tp1')
+                        if not data.get('tp2') and position_data.get('tp2'):
+                            data['tp2'] = position_data.get('tp2')
+                        if not data.get('tp3') and position_data.get('tp3'):
+                            data['tp3'] = position_data.get('tp3')
+                        if not data.get('stop_loss') and position_data.get('stop_loss'):
+                            data['stop_loss'] = position_data.get('stop_loss')
+                        
+                        # حذف من الذاكرة عند TP3 أو SL
+                        position_closed = False
+                        if signal in ['TP3_HIT', 'STOP_LOSS']:
+                            clear_open_position(symbol)
+                            logger.info(f"🗑️ Removed position from memory: {symbol} (closed: {signal})")
+                            position_closed = True
+                        else:
+                            # TP1 أو TP2 - لا تحذف من الذاكرة
+                            logger.info(f"✅ Detected {signal} from previous position in memory")
+                        
+                        # إذا أُغلقت الصفقة (TP3 أو SL)، لا نحفظ الإشارة الجديدة (BUY/SELL) لأنها قد تكون TP/SL فقط
+                        # لكن إذا كانت الإشارة الأصلية (BUY/SELL) موجودة مع TP/SL في JSON، يمكن حفظها بعد إرسال TP/SL
+                        # لكن في هذه الحالة، نرسل TP/SL فقط ولا نحفظ صفقة جديدة من نفس الإشارة
+                        # (لأن الإشارة نفسها كانت TP/SL، وليست إشارة entry جديدة)
+                        if not position_closed:
+                            # TP1 أو TP2 - لا نحفظ إشارة جديدة (الصفقة لا تزال مفتوحة)
+                            pass
+                        else:
+                            # TP3 أو SL - الصفقة أُغلقت، لكن لا نحفظ إشارة جديدة من نفس الإشارة
+                            # (لأن الإشارة كانت TP/SL، وليست entry جديدة)
+                            pass
+            
+            # ═══════════════════════════════════════════════════════════════════════════
+            # 2. إذا كانت الإشارة BUY أو SELL (ولم تكن TP/SL)، تحقق من REVERSE
+            # ═══════════════════════════════════════════════════════════════════════════
+            # فقط إذا لم يتم اكتشاف TP/SL، نتعامل مع الإشارة الجديدة (Entry Signal)
+            if not is_tp_sl_detected and signal in ['BUY', 'SELL'] and signal == original_signal:
                 # استخدام نظام الذاكرة لتحديد إذا كانت الإشارة عكسية
                 detected_signal = detect_reverse_signal(symbol, signal)
                 if detected_signal != signal:
@@ -993,47 +1109,128 @@ def webhook(chat_id=None):
                     data['signal'] = signal
             
             # حفظ الصفقة في الذاكرة عند فتح صفقة جديدة (BUY أو SELL)
-            if signal in ['BUY', 'SELL', 'BUY_REVERSE', 'SELL_REVERSE']:
+            # فقط إذا لم يتم اكتشاف TP/SL (لأن TP/SL يعني إغلاق الصفقة، وليس فتح صفقة جديدة)
+            if not is_tp_sl_detected and signal in ['BUY', 'SELL', 'BUY_REVERSE', 'SELL_REVERSE']:
                 # استخراج نوع الصفقة الأساسي (BUY أو SELL) من الإشارة
                 base_signal = 'BUY' if signal in ['BUY', 'BUY_REVERSE'] else 'SELL'
-                set_open_position(symbol, base_signal)
-                logger.info(f"💾 Saved position in memory: {symbol} = {base_signal}")
+                # حفظ TP/SL في الذاكرة أيضاً
+                entry_price = data.get('entry_price') or data.get('price')
+                tp1 = data.get('tp1')
+                tp2 = data.get('tp2')
+                tp3 = data.get('tp3')
+                stop_loss = data.get('stop_loss')
+                set_open_position(symbol, base_signal, entry_price, tp1, tp2, tp3, stop_loss)
+                logger.info(f"💾 Saved position in memory: {symbol} = {base_signal} with TP/SL data")
             
             # حذف الصفقة من الذاكرة عند إغلاق الصفقة (TP3 أو STOP_LOSS)
             if signal in ['TP3_HIT', 'TP3', 'STOP_LOSS', 'SL']:
                 clear_open_position(symbol)
                 logger.info(f"🗑️ Removed position from memory: {symbol} (closed: {signal})")
         elif symbol and not signal:
-            # إذا كان هناك symbol لكن لا يوجد signal، قد يكون entry signal
-            # تحقق من TP/SL لتحديد إذا كانت entry signal
+            # إذا كان هناك symbol لكن لا يوجد signal، تحقق من البيانات لتحديد نوع الإشارة
             entry_price = data.get('entry_price') or data.get('price')
+            exit_price = data.get('exit_price')  # للـ TP/SL
+            current_price = data.get('price') or data.get('close') or entry_price  # السعر الحالي
             tp1 = data.get('tp1')
             tp2 = data.get('tp2')
             tp3 = data.get('tp3')
             stop_loss = data.get('stop_loss')
             
-            # إذا كان هناك TP/SL، فهذه إشارة entry (BUY أو SELL)
-            if entry_price and (tp1 or tp2 or tp3 or stop_loss):
-                # تحديد BUY أو SELL من TP/SL
+            # ═══════════════════════════════════════════════════════════════════════════
+            # 🧠 تحديد نوع الإشارة تلقائياً من الذاكرة والبيانات
+            # ═══════════════════════════════════════════════════════════════════════════
+            
+            # 1. أولاً: تحقق من الذاكرة إذا كانت هناك صفقة مفتوحة + سعر حالي (TP/SL)
+            if current_price and current_price > 0:
+                tp_sl_signal = detect_tp_sl_from_memory(symbol, current_price)
+                if tp_sl_signal:
+                    signal = tp_sl_signal
+                    data['signal'] = signal
+                    # تحديث data بالبيانات من الذاكرة
+                    position_data = get_open_position(symbol)
+                    if position_data and isinstance(position_data, dict):
+                        if not data.get('entry_price') and position_data.get('entry_price'):
+                            data['entry_price'] = position_data.get('entry_price')
+                        if not data.get('tp1') and position_data.get('tp1'):
+                            data['tp1'] = position_data.get('tp1')
+                        if not data.get('tp2') and position_data.get('tp2'):
+                            data['tp2'] = position_data.get('tp2')
+                        if not data.get('tp3') and position_data.get('tp3'):
+                            data['tp3'] = position_data.get('tp3')
+                        if not data.get('stop_loss') and position_data.get('stop_loss'):
+                            data['stop_loss'] = position_data.get('stop_loss')
+                    
+                    # حذف من الذاكرة عند TP3 أو SL
+                    if signal in ['TP3_HIT', 'STOP_LOSS']:
+                        clear_open_position(symbol)
+                        logger.info(f"🗑️ Removed position from memory: {symbol} (closed: {signal})")
+            
+            # 2. إذا كان هناك exit_price أو current_price مع TP/SL في البيانات، قد تكون TP أو SL
+            if not signal:
+                price_to_check = exit_price or current_price
+                
+                if price_to_check and entry_price and (tp1 or tp2 or tp3 or stop_loss):
+                    # تحقق من أي TP/SL تم الوصول إليه
+                    # نستخدم tolerance صغير (0.5%) لتحديد أي TP/SL
+                    tolerance = abs(price_to_check - entry_price) * 0.005 if entry_price > 0 else price_to_check * 0.005
+                    
+                    # تحقق من TP3 أولاً (الأبعد)
+                    if tp3 and abs(price_to_check - tp3) <= tolerance:
+                        signal = 'TP3_HIT'
+                        # حذف من الذاكرة عند TP3
+                        clear_open_position(symbol)
+                        logger.info(f"🗑️ Removed position from memory: {symbol} (closed: TP3)")
+                    # ثم TP2
+                    elif tp2 and abs(price_to_check - tp2) <= tolerance:
+                        signal = 'TP2_HIT'
+                    # ثم TP1
+                    elif tp1 and abs(price_to_check - tp1) <= tolerance:
+                        signal = 'TP1_HIT'
+                    # ثم Stop Loss
+                    elif stop_loss and abs(price_to_check - stop_loss) <= tolerance:
+                        signal = 'STOP_LOSS'
+                        # حذف من الذاكرة عند SL
+                        clear_open_position(symbol)
+                        logger.info(f"🗑️ Removed position from memory: {symbol} (closed: SL)")
+            
+            # 3. إذا كان هناك TP/SL و entry_price (بدون exit_price)، فهذه إشارة entry (BUY/SELL)
+            if not signal and entry_price and (tp1 or tp2 or tp3 or stop_loss):
+                # تحديد BUY أو SELL من TP/SL relationships
                 tp_value = tp1 or tp2 or tp3
                 if tp_value and stop_loss and tp_value > 0 and stop_loss > 0:
                     if tp_value > entry_price and stop_loss < entry_price:
                         signal = 'BUY'
                     elif tp_value < entry_price and stop_loss > entry_price:
                         signal = 'SELL'
+                elif tp_value and tp_value > 0:
+                    # فقط TP متاح
+                    if tp_value > entry_price:
+                        signal = 'BUY'
+                    else:
+                        signal = 'SELL'
+                elif stop_loss and stop_loss > 0:
+                    # فقط SL متاح
+                    if stop_loss < entry_price:
+                        signal = 'BUY'
+                    else:
+                        signal = 'SELL'
+            
+            # 4. إذا تم تحديد BUY/SELL، استخدم نظام الذاكرة لتحديد REVERSE
+            if signal in ['BUY', 'SELL']:
+                detected_signal = detect_reverse_signal(symbol, signal)
+                if detected_signal != signal:
+                    logger.info(f"🔄 Signal changed due to memory system: {signal} → {detected_signal}")
+                    signal = detected_signal
+                data['signal'] = signal
                 
-                # الآن استخدم نظام الذاكرة لتحديد REVERSE
-                if signal in ['BUY', 'SELL']:
-                    detected_signal = detect_reverse_signal(symbol, signal)
-                    if detected_signal != signal:
-                        logger.info(f"🔄 Signal changed due to memory system: {signal} → {detected_signal}")
-                        signal = detected_signal
-                    data['signal'] = signal
-                    
-                    # حفظ في الذاكرة
-                    base_signal = 'BUY' if signal in ['BUY', 'BUY_REVERSE'] else 'SELL'
-                    set_open_position(symbol, base_signal)
-                    logger.info(f"💾 Saved position in memory: {symbol} = {base_signal}")
+                # حفظ في الذاكرة مع TP/SL
+                base_signal = 'BUY' if signal in ['BUY', 'BUY_REVERSE'] else 'SELL'
+                set_open_position(symbol, base_signal, entry_price, tp1, tp2, tp3, stop_loss)
+                logger.info(f"💾 Saved position in memory: {symbol} = {base_signal} with TP/SL")
+            elif signal:
+                # TP/SL signals - تأكد من تحديث data
+                data['signal'] = signal
+                logger.info(f"✅ Auto-detected {signal} from memory and price data")
         
         # ═══════════════════════════════════════════════════════════════════════════
         # Validate configuration before processing
