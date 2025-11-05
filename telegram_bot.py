@@ -42,6 +42,60 @@ def format_price(price: float) -> str:
     else:
         return f"{price:.8f}".rstrip('0').rstrip('.')
 
+def format_timeframe(timeframe: str) -> str:
+    """تحويل الإطار الزمني إلى تنسيق قابل للقراءة"""
+    if not timeframe or timeframe == 'N/A':
+        return 'N/A'
+    
+    # إذا كان رقم (دقائق)
+    try:
+        minutes = int(timeframe)
+        
+        # تحويل إلى تنسيق أفضل
+        if minutes < 60:
+            return f"{minutes} د"  # دقائق
+        elif minutes < 1440:  # أقل من 24 ساعة
+            hours = minutes // 60
+            remaining_minutes = minutes % 60
+            if remaining_minutes == 0:
+                return f"{hours} س"  # ساعات فقط
+            else:
+                return f"{hours} س {remaining_minutes} د"  # ساعات ودقائق
+        else:  # أيام
+            days = minutes // 1440
+            remaining_hours = (minutes % 1440) // 60
+            if remaining_hours == 0:
+                return f"{days} ي"
+            else:
+                return f"{days} ي {remaining_hours} س"
+    except (ValueError, TypeError):
+        # إذا كان نص (مثل "15D", "1H", "5M")
+        timeframe_upper = str(timeframe).upper()
+        
+        # تحويل الاختصارات الشائعة
+        if timeframe_upper.endswith('D'):
+            days = int(timeframe_upper.replace('D', ''))
+            return f"{days} ي"
+        elif timeframe_upper.endswith('H'):
+            hours = int(timeframe_upper.replace('H', ''))
+            return f"{hours} س"
+        elif timeframe_upper.endswith('M'):
+            minutes = int(timeframe_upper.replace('M', ''))
+            return f"{minutes} د"
+        elif timeframe_upper.endswith('W'):
+            weeks = int(timeframe_upper.replace('W', ''))
+            return f"{weeks} أ"
+        elif timeframe_upper.endswith('S'):
+            seconds = int(timeframe_upper.replace('S', ''))
+            if seconds < 60:
+                return f"{seconds} ث"
+            else:
+                minutes = seconds // 60
+                return f"{minutes} د"
+        
+        # إذا لم يكن تنسيق معروف، ارجعه كما هو
+        return str(timeframe)
+
 def check_bot_status(chat_id: str) -> bool:
     """التحقق من حالة البوت في المجموعة قبل الإرسال"""
     global _bot_kicked_chats
@@ -172,7 +226,7 @@ def format_buy_signal(data: dict) -> str:
     message += f"📊 الرمز: {escape_html(symbol)}\n"
     message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
     message += f"⏰ الوقت: {escape_html(time)}\n"
-    message += f"📈 الإطار الزمني: {escape_html(timeframe)}\n\n"
+    message += f"📈 الإطار الزمني: {escape_html(format_timeframe(timeframe))}\n\n"
     
     # عرض TP/SL المتاحة (حتى لو كانت null، سنعرض رسالة)
     has_tp_sl = tp1 or tp2 or tp3 or stop_loss
@@ -189,7 +243,9 @@ def format_buy_signal(data: dict) -> str:
             message += f"🛑 وقف الخسارة: <code>{format_price(float(stop_loss))}</code>"
     else:
         # إذا لم تكن TP/SL موجودة، أضف رسالة توضيحية
-        message += f"⚠️ <i>ملاحظة: TP/SL غير متاحة - تأكد من أسماء الـ plots في التنبيه</i>"
+        message += f"⚠️ <i>ملاحظة: TP/SL غير متاحة</i>\n"
+        message += f"💡 <i>الحل: تأكد من أسماء الـ plots في التنبيه</i>\n"
+        message += f"📝 <i>الأسماء الشائعة: \"TP Line 1\", \"TP1\", \"SL Line\", \"Stop Loss\"</i>"
     
     return message
 
@@ -208,7 +264,7 @@ def format_sell_signal(data: dict) -> str:
     message += f"📊 الرمز: {escape_html(symbol)}\n"
     message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
     message += f"⏰ الوقت: {escape_html(time)}\n"
-    message += f"📈 الإطار الزمني: {escape_html(timeframe)}\n\n"
+    message += f"📈 الإطار الزمني: {escape_html(format_timeframe(timeframe))}\n\n"
     
     # عرض TP/SL المتاحة
     has_tp_sl = tp1 or tp2 or tp3 or stop_loss
@@ -224,7 +280,9 @@ def format_sell_signal(data: dict) -> str:
         if stop_loss:
             message += f"🛑 وقف الخسارة: <code>{format_price(float(stop_loss))}</code>"
     else:
-        message += f"⚠️ <i>ملاحظة: TP/SL غير متاحة - تأكد من أسماء الـ plots في التنبيه</i>"
+        message += f"⚠️ <i>ملاحظة: TP/SL غير متاحة</i>\n"
+        message += f"💡 <i>الحل: تأكد من أسماء الـ plots في التنبيه</i>\n"
+        message += f"📝 <i>الأسماء الشائعة: \"TP Line 1\", \"TP1\", \"SL Line\", \"Stop Loss\"</i>"
     
     return message
 
@@ -244,7 +302,7 @@ def format_buy_reverse_signal(data: dict) -> str:
     message += f"📊 الرمز: {escape_html(symbol)}\n"
     message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
     message += f"⏰ الوقت: {escape_html(time)}\n"
-    message += f"📈 الإطار الزمني: {escape_html(timeframe)}\n\n"
+    message += f"📈 الإطار الزمني: {escape_html(format_timeframe(timeframe))}\n\n"
     
     # عرض TP/SL المتاحة
     has_tp_sl = tp1 or tp2 or tp3 or stop_loss
@@ -260,7 +318,9 @@ def format_buy_reverse_signal(data: dict) -> str:
         if stop_loss:
             message += f"🛑 وقف الخسارة: <code>{format_price(float(stop_loss))}</code>"
     else:
-        message += f"⚠️ <i>ملاحظة: TP/SL غير متاحة - تأكد من أسماء الـ plots في التنبيه</i>"
+        message += f"⚠️ <i>ملاحظة: TP/SL غير متاحة</i>\n"
+        message += f"💡 <i>الحل: تأكد من أسماء الـ plots في التنبيه</i>\n"
+        message += f"📝 <i>الأسماء الشائعة: \"TP Line 1\", \"TP1\", \"SL Line\", \"Stop Loss\"</i>"
     
     return message
 
@@ -280,7 +340,7 @@ def format_sell_reverse_signal(data: dict) -> str:
     message += f"📊 الرمز: {escape_html(symbol)}\n"
     message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
     message += f"⏰ الوقت: {escape_html(time)}\n"
-    message += f"📈 الإطار الزمني: {escape_html(timeframe)}\n\n"
+    message += f"📈 الإطار الزمني: {escape_html(format_timeframe(timeframe))}\n\n"
     
     # عرض TP/SL المتاحة
     has_tp_sl = tp1 or tp2 or tp3 or stop_loss
@@ -296,7 +356,9 @@ def format_sell_reverse_signal(data: dict) -> str:
         if stop_loss:
             message += f"🛑 وقف الخسارة: <code>{format_price(float(stop_loss))}</code>"
     else:
-        message += f"⚠️ <i>ملاحظة: TP/SL غير متاحة - تأكد من أسماء الـ plots في التنبيه</i>"
+        message += f"⚠️ <i>ملاحظة: TP/SL غير متاحة</i>\n"
+        message += f"💡 <i>الحل: تأكد من أسماء الـ plots في التنبيه</i>\n"
+        message += f"📝 <i>الأسماء الشائعة: \"TP Line 1\", \"TP1\", \"SL Line\", \"Stop Loss\"</i>"
     
     return message
 
