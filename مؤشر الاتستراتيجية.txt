@@ -490,30 +490,34 @@ p_slLine     = plot (  condition ==  1.0 or  condition == -1.0 or    condition =
 
 // حساب TP/SL مباشرة عند إشارة الدخول (للاستخدام في التنبيهات)
 // هذه القيم تُحسب مباشرة عند الإشارة لضمان توفرها في التنبيهات
-// تشمل الإشارات العادية والعكسية
-tp1_at_entry = (leTrigger and (condition[1] <= 0.0 or (condition[1] < 0.0 and TPSType == "Trailing"))) or 
-                (seTrigger and (condition[1] >= 0.0 or (condition[1] > 0.0 and TPSType == "Trailing"))) ? 
-                (leTrigger ? close + (1 * profitFactor * tpatrValue) : close - (1 * profitFactor * tpatrValue)) : 
+// استخدام condition مباشرة لضمان أن القيم متاحة عند إرسال التنبيه
+
+// تحديد نوع الإشارة - التحقق من تغيير condition من 0 إلى 1 أو -1 (إشارة دخول جديدة)
+is_new_long = barstate.isconfirmed and condition == 1.0 and condition[1] <= 0.0 and tradeDateIsAllowed
+is_new_short = barstate.isconfirmed and condition == -1.0 and condition[1] >= 0.0 and tradeDateIsAllowed
+
+// حساب TP/SL - عند إشارة الدخول، استخدم close مباشرة لحساب TP/SL
+tp1_at_entry = is_new_long ? close + (1 * profitFactor * tpatrValue) : 
+                is_new_short ? close - (1 * profitFactor * tpatrValue) : 
                 (condition >= 1.0 or condition <= -1.0 ? tp1Line : na)
-tp2_at_entry = (leTrigger and (condition[1] <= 0.0 or (condition[1] < 0.0 and TPSType == "Trailing"))) or 
-                (seTrigger and (condition[1] >= 0.0 or (condition[1] > 0.0 and TPSType == "Trailing"))) ? 
-                (leTrigger ? close + (2 * profitFactor * tpatrValue) : close - (2 * profitFactor * tpatrValue)) : 
+tp2_at_entry = is_new_long ? close + (2 * profitFactor * tpatrValue) : 
+                is_new_short ? close - (2 * profitFactor * tpatrValue) : 
                 (condition >= 1.0 or condition <= -1.0 ? tp2Line : na)
-tp3_at_entry = (leTrigger and (condition[1] <= 0.0 or (condition[1] < 0.0 and TPSType == "Trailing"))) or 
-                (seTrigger and (condition[1] >= 0.0 or (condition[1] > 0.0 and TPSType == "Trailing"))) ? 
-                (leTrigger ? close + (3 * profitFactor * tpatrValue) : close - (3 * profitFactor * tpatrValue)) : 
+tp3_at_entry = is_new_long ? close + (3 * profitFactor * tpatrValue) : 
+                is_new_short ? close - (3 * profitFactor * tpatrValue) : 
                 (condition >= 1.0 or condition <= -1.0 ? tp3Line : na)
-sl_at_entry  = (leTrigger and (condition[1] <= 0.0 or (condition[1] < 0.0 and TPSType == "Trailing"))) or 
-                (seTrigger and (condition[1] >= 0.0 or (condition[1] > 0.0 and TPSType == "Trailing"))) ? 
-                (leTrigger ? close - (1 * profitFactor * tpatrValue) : close + (1 * profitFactor * tpatrValue)) : 
+sl_at_entry  = is_new_long ? close - (1 * profitFactor * tpatrValue) : 
+                is_new_short ? close + (1 * profitFactor * tpatrValue) : 
                 (condition >= 1.0 or condition <= -1.0 ? slLine : na)
 
 // Plots إضافية للتنبيهات - تُستخدم في {{plot()}} في التنبيهات
-// هذه Plots تُعرض دائماً حتى عند الإشارة مباشرة
-plot(tp1_at_entry, title="TP1 Alert", display=display.none)  // display=none لأنها للتنبيهات فقط
-plot(tp2_at_entry, title="TP2 Alert", display=display.none)
-plot(tp3_at_entry, title="TP3 Alert", display=display.none)
-plot(sl_at_entry, title="SL Alert", display=display.none)
+// هذه Plots تُحسب مباشرة عند إشارة الدخول لضمان توفرها في التنبيهات
+// ملاحظة: لا نستخدم display.none لأن TradingView يحتاج إلى plot مرئي للتنبيهات
+// استخدام display.pane لجعلها مرئية ولكن شفافة (لون أبيض شفاف 100%)
+plot(tp1_at_entry, title="TP1 Alert", color=color.new(color.white, 100), linewidth=1, style=plot.style_linebr, display=display.all)
+plot(tp2_at_entry, title="TP2 Alert", color=color.new(color.white, 100), linewidth=1, style=plot.style_linebr, display=display.all)
+plot(tp3_at_entry, title="TP3 Alert", color=color.new(color.white, 100), linewidth=1, style=plot.style_linebr, display=display.all)
+plot(sl_at_entry, title="SL Alert", color=color.new(color.white, 100), linewidth=1, style=plot.style_linebr, display=display.all)
 
 //fill(  p_tp3Line, p_entryLine,  color      = leTrigger or seTrigger ? na :color.new(color.green, 90))
 fill(  p_entryLine, p_slLine,  color      = leTrigger or seTrigger ? na :color.new(color.red, 90))

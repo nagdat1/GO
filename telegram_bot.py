@@ -211,6 +211,31 @@ def send_message(message: str, chat_id: str = None, retry_count: int = 0) -> boo
         logger.error(f"❌ Unexpected error sending message: {e}", exc_info=True)
         return False
 
+def calculate_tp_sl(entry_price: float, is_long: bool = True) -> dict:
+    """حساب TP/SL بناءً على entry_price (ATR-based calculation)"""
+    # إعدادات ATR من المؤشر
+    atr_length = 20
+    profit_factor = 2.5
+    
+    # حساب ATR تقريبي (نستخدم نسبة تقريبية من entry_price)
+    # ATR عادة يكون حوالي 0.5% - 2% من السعر حسب الإطار الزمني
+    # سنستخدم 1% كقيمة تقريبية (يمكن تعديلها)
+    estimated_atr_percent = 0.01  # 1% من السعر
+    estimated_atr = entry_price * estimated_atr_percent
+    
+    if is_long:
+        tp1 = entry_price + (1 * profit_factor * estimated_atr)
+        tp2 = entry_price + (2 * profit_factor * estimated_atr)
+        tp3 = entry_price + (3 * profit_factor * estimated_atr)
+        stop_loss = entry_price - (1 * profit_factor * estimated_atr)
+    else:
+        tp1 = entry_price - (1 * profit_factor * estimated_atr)
+        tp2 = entry_price - (2 * profit_factor * estimated_atr)
+        tp3 = entry_price - (3 * profit_factor * estimated_atr)
+        stop_loss = entry_price + (1 * profit_factor * estimated_atr)
+    
+    return {"tp1": tp1, "tp2": tp2, "tp3": tp3, "stop_loss": stop_loss}
+
 def format_buy_signal(data: dict) -> str:
     """تنسيق إشارة الشراء (صفقة لونج)"""
     symbol = data.get('symbol', 'N/A')
@@ -222,13 +247,24 @@ def format_buy_signal(data: dict) -> str:
     time = data.get('time', 'N/A')
     timeframe = data.get('timeframe', 'N/A')
     
+    # إذا لم تكن TP/SL موجودة، حسابها بناءً على entry_price
+    if not (tp1 or tp2 or tp3 or stop_loss) and entry_price:
+        try:
+            calculated = calculate_tp_sl(float(entry_price), is_long=True)
+            tp1 = calculated['tp1']
+            tp2 = calculated['tp2']
+            tp3 = calculated['tp3']
+            stop_loss = calculated['stop_loss']
+        except:
+            pass
+    
     message = f"🟢 <b>صفقة لونج (LONG)</b> 🟢\n\n"
     message += f"📊 الرمز: {escape_html(symbol)}\n"
     message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
     message += f"⏰ الوقت: {escape_html(time)}\n"
     message += f"📈 الإطار الزمني: {escape_html(format_timeframe(timeframe))}\n\n"
     
-    # عرض TP/SL المتاحة (حتى لو كانت null، سنعرض رسالة)
+    # عرض TP/SL المتاحة
     has_tp_sl = tp1 or tp2 or tp3 or stop_loss
     if has_tp_sl:
         message += f"🎯 <b>أهداف الربح:</b>\n"
@@ -259,6 +295,17 @@ def format_sell_signal(data: dict) -> str:
     stop_loss = data.get('stop_loss')
     time = data.get('time', 'N/A')
     timeframe = data.get('timeframe', 'N/A')
+    
+    # إذا لم تكن TP/SL موجودة، حسابها بناءً على entry_price
+    if not (tp1 or tp2 or tp3 or stop_loss) and entry_price:
+        try:
+            calculated = calculate_tp_sl(float(entry_price), is_long=False)
+            tp1 = calculated['tp1']
+            tp2 = calculated['tp2']
+            tp3 = calculated['tp3']
+            stop_loss = calculated['stop_loss']
+        except:
+            pass
     
     message = f"🔴 <b>صفقة شورت (SHORT)</b> 🔴\n\n"
     message += f"📊 الرمز: {escape_html(symbol)}\n"
@@ -297,6 +344,17 @@ def format_buy_reverse_signal(data: dict) -> str:
     time = data.get('time', 'N/A')
     timeframe = data.get('timeframe', 'N/A')
     
+    # إذا لم تكن TP/SL موجودة، حسابها بناءً على entry_price
+    if not (tp1 or tp2 or tp3 or stop_loss) and entry_price:
+        try:
+            calculated = calculate_tp_sl(float(entry_price), is_long=True)
+            tp1 = calculated['tp1']
+            tp2 = calculated['tp2']
+            tp3 = calculated['tp3']
+            stop_loss = calculated['stop_loss']
+        except:
+            pass
+    
     message = f"🟠 <b>صفقة لونج عكسي (LONG REVERSE)</b> 🟠\n"
     message += f"⚠️ <b>تم عكس الصفقة</b>\n\n"
     message += f"📊 الرمز: {escape_html(symbol)}\n"
@@ -334,6 +392,17 @@ def format_sell_reverse_signal(data: dict) -> str:
     stop_loss = data.get('stop_loss')
     time = data.get('time', 'N/A')
     timeframe = data.get('timeframe', 'N/A')
+    
+    # إذا لم تكن TP/SL موجودة، حسابها بناءً على entry_price
+    if not (tp1 or tp2 or tp3 or stop_loss) and entry_price:
+        try:
+            calculated = calculate_tp_sl(float(entry_price), is_long=False)
+            tp1 = calculated['tp1']
+            tp2 = calculated['tp2']
+            tp3 = calculated['tp3']
+            stop_loss = calculated['stop_loss']
+        except:
+            pass
     
     message = f"🟠 <b>صفقة شورت عكسي (SHORT REVERSE)</b> 🟠\n"
     message += f"⚠️ <b>تم عكس الصفقة</b>\n\n"
