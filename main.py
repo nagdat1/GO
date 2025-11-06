@@ -68,22 +68,22 @@ def is_recent_duplicate(message_key: str, data: dict) -> bool:
     # التحقق من التكرار بناءً على نوع الإشارة
     signal_key = f"{signal}_{symbol}"
     
-    # للإشارات الرئيسية (BUY, SELL, etc.)، منع التكرار لمدة 30 ثانية
+    # للإشارات الرئيسية (BUY, SELL, etc.)، منع التكرار لمدة 60 ثانية (زيادة لتجنب spam)
     if signal in ['BUY', 'SELL', 'BUY_REVERSE', 'SELL_REVERSE', 'LONG', 'SHORT', 'LONG_REVERSE', 'SHORT_REVERSE']:
         if signal_key in last_signal_time:
             last_time = last_signal_time[signal_key]
             time_diff = (current_time - last_time).total_seconds()
-            if time_diff < 30:  # 30 seconds
+            if time_diff < 60:  # 60 seconds (زيادة من 30 لتجنب spam)
                 logger.warning(f"⚠️ تم تجاهل إشارة متكررة: {signal} لـ {symbol} (آخر إشارة قبل {time_diff:.1f} ثانية)")
                 return True
         last_signal_time[signal_key] = current_time
     
-    # للإشارات TP/SL، منع التكرار لمدة 15 ثانية
+    # للإشارات TP/SL، منع التكرار لمدة 30 ثانية (زيادة من 15)
     elif signal in ['TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_LOSS', 'TP1', 'TP2', 'TP3', 'SL']:
         if signal_key in last_signal_time:
             last_time = last_signal_time[signal_key]
             time_diff = (current_time - last_time).total_seconds()
-            if time_diff < 15:  # 15 seconds
+            if time_diff < 30:  # 30 seconds (زيادة من 15)
                 logger.warning(f"⚠️ تم تجاهل إشارة متكررة: {signal} لـ {symbol} (آخر إشارة قبل {time_diff:.1f} ثانية)")
                 return True
         last_signal_time[signal_key] = current_time

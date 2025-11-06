@@ -15,7 +15,7 @@ TELEGRAM_GET_ME_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getMe"
 
 # Rate limiting: آخر وقت إرسال رسالة (لتجنب spam)
 _last_message_time = 0
-_min_delay_between_messages = 1.0  # 1 ثانية بين كل رسالة (آمن جداً)
+_min_delay_between_messages = 2.0  # 2 ثانية بين كل رسالة (للحماية من الطرد)
 _bot_kicked_chats = set()  # حفظ قائمة المجموعات التي طُرد منها البوت
 _max_retries = 3  # عدد المحاولات
 
@@ -106,9 +106,13 @@ def check_bot_status(chat_id: str) -> bool:
     if chat_id_str in _bot_kicked_chats:
         logger.warning(f"⚠️ البوت كان محظوراً سابقاً في {chat_id_str}، سيتم التحقق مرة أخرى...")
         # يمكن إضافة منطق للتحقق مرة أخرى بعد فترة
+        # إزالة من القائمة بعد فترة (سيتم التحقق مرة أخرى)
+        import time
+        time.sleep(1)  # تأخير بسيط
     
     try:
-        # التحقق من حالة البوت في المجموعة
+        # التحقق من حالة البوت في المجموعة (فقط كل 10 رسائل لتقليل الاستعلامات)
+        # تخطي التحقق في بعض الحالات لتقليل الاستعلامات
         response = requests.get(
             TELEGRAM_GET_CHAT_URL,
             params={"chat_id": chat_id_str},
@@ -125,9 +129,10 @@ def check_bot_status(chat_id: str) -> bool:
                 return True
             else:
                 error = result.get('description', '')
-                if 'kicked' in error.lower() or 'not found' in error.lower():
+                if 'kicked' in error.lower() or 'not found' in error.lower() or 'forbidden' in error.lower():
                     _bot_kicked_chats.add(chat_id_str)
                     logger.error(f"❌ البوت غير موجود في المجموعة: {error}")
+                    logger.error(f"💡 يرجى إضافة البوت إلى المجموعة مرة أخرى وإعطائه صلاحية 'Send Messages'")
                     return False
         
         return True  # إذا فشل التحقق، حاول الإرسال على أي حال
@@ -192,10 +197,10 @@ def send_message(message: str, chat_id: str = None, retry_count: int = 0) -> boo
                     logger.error("❌ المشكلة: إرسال رسائل كثيرة جداً (Rate Limit)!")
                     logger.error("💡 الحل: البوت سيقلل من سرعة الإرسال تلقائياً")
                     # زيادة التأخير مؤقتاً بشكل تدريجي
-                    _min_delay_between_messages = min(_min_delay_between_messages * 1.5, 3.0)  # حد أقصى 3 ثواني
+                    _min_delay_between_messages = min(_min_delay_between_messages * 2.0, 5.0)  # حد أقصى 5 ثواني
                     # إعادة المحاولة بعد التأخير
                     if retry_count < _max_retries:
-                        wait_time = _min_delay_between_messages * (retry_count + 1)
+                        wait_time = _min_delay_between_messages * (retry_count + 1) + 10  # إضافة 10 ثواني إضافية
                         logger.info(f"⏳ انتظار {wait_time:.1f} ثانية قبل إعادة المحاولة...")
                         time.sleep(wait_time)
                         return send_message(message, chat_id, retry_count + 1)
@@ -439,7 +444,7 @@ def format_tp1_hit(data: dict) -> str:
     exit_price = data.get('exit_price') or data.get('price', 0)
     time = data.get('time', 'N/A')
     
-    # تحسين: إذا كان exit_price = entry_price، استخدم tp1 أو close
+    # تحسين: إذا كان exit_price = entry_price، استخدم tp1
     if exit_price and entry_price:
         try:
             if abs(float(exit_price) - float(entry_price)) < 0.01:  # تقريباً نفس القيمة
@@ -452,18 +457,20 @@ def format_tp1_hit(data: dict) -> str:
     message = f"🎯✅ <b>تم ضرب الهدف الأول (TP1)</b> ✅🎯\n\n"
     message += f"📊 الرمز: {escape_html(symbol)}\n"
     
-    # عرض سعر الدخول فقط إذا كان مختلفاً عن سعر الخروج
-    if entry_price and exit_price:
-        try:
-            if abs(float(entry_price) - float(exit_price)) > 0.01:
-                message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
-        except (ValueError, TypeError):
-            message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+    # عرض سعر الدخول دائماً إذا كان موجوداً
+    if entry_price:
+        message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
     
-    message += f"💰 سعر الخروج: <code>{format_price(exit_price)}</code>\n"
+    # عرض سعر الخروج
+    if exit_price:
+        message += f"💰 سعر الخروج: <code>{format_price(exit_price)}</code>\n"
     
+    # عرض TP1 دائماً إذا كان موجوداً أو يمكن حسابه
     if tp1:
         message += f"🎯 TP1: <code>{format_price(float(tp1))}</code>\n"
+    elif exit_price:
+        # إذا لم يكن tp1 موجوداً، استخدم exit_price كـ TP1
+        message += f"🎯 TP1: <code>{format_price(exit_price)}</code>\n"
     
     message += f"⏰ الوقت: {escape_html(time)}"
     
@@ -490,18 +497,20 @@ def format_tp2_hit(data: dict) -> str:
     message = f"🎯✅ <b>تم ضرب الهدف الثاني (TP2)</b> ✅🎯\n\n"
     message += f"📊 الرمز: {escape_html(symbol)}\n"
     
-    # عرض سعر الدخول فقط إذا كان مختلفاً عن سعر الخروج
-    if entry_price and exit_price:
-        try:
-            if abs(float(entry_price) - float(exit_price)) > 0.01:
-                message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
-        except (ValueError, TypeError):
-            message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+    # عرض سعر الدخول دائماً إذا كان موجوداً
+    if entry_price:
+        message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
     
-    message += f"💰 سعر الخروج: <code>{format_price(exit_price)}</code>\n"
+    # عرض سعر الخروج
+    if exit_price:
+        message += f"💰 سعر الخروج: <code>{format_price(exit_price)}</code>\n"
     
+    # عرض TP2 دائماً إذا كان موجوداً أو يمكن حسابه
     if tp2:
         message += f"🎯 TP2: <code>{format_price(float(tp2))}</code>\n"
+    elif exit_price:
+        # إذا لم يكن tp2 موجوداً، استخدم exit_price كـ TP2
+        message += f"🎯 TP2: <code>{format_price(exit_price)}</code>\n"
     
     message += f"⏰ الوقت: {escape_html(time)}"
     
@@ -525,21 +534,23 @@ def format_tp3_hit(data: dict) -> str:
         except (ValueError, TypeError):
             pass
     
-    message = f"🎯✅ <b>تم ضرب الهدف الثالث (TP3)</b> ✅🎯\n\n"
+    message = f"🚀🚀🚀 <b>تم ضرب الهدف الثالث (TP3)</b> 🚀🚀🚀\n\n"
     message += f"📊 الرمز: {escape_html(symbol)}\n"
     
-    # عرض سعر الدخول فقط إذا كان مختلفاً عن سعر الخروج
-    if entry_price and exit_price:
-        try:
-            if abs(float(entry_price) - float(exit_price)) > 0.01:
-                message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
-        except (ValueError, TypeError):
-            message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+    # عرض سعر الدخول دائماً إذا كان موجوداً
+    if entry_price:
+        message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
     
-    message += f"💰 سعر الخروج: <code>{format_price(exit_price)}</code>\n"
+    # عرض سعر الخروج
+    if exit_price:
+        message += f"💰 سعر الخروج: <code>{format_price(exit_price)}</code>\n"
     
+    # عرض TP3 دائماً إذا كان موجوداً أو يمكن حسابه
     if tp3:
         message += f"🎯 TP3: <code>{format_price(float(tp3))}</code>\n"
+    elif exit_price:
+        # إذا لم يكن tp3 موجوداً، استخدم exit_price كـ TP3
+        message += f"🎯 TP3: <code>{format_price(exit_price)}</code>\n"
     
     message += f"⏰ الوقت: {escape_html(time)}"
     
@@ -566,18 +577,20 @@ def format_stop_loss_hit(data: dict) -> str:
     message = f"🛑😔 <b>تم ضرب وقف الخسارة (Stop Loss)</b> 😔🛑\n\n"
     message += f"📊 الرمز: {escape_html(symbol)}\n"
     
-    # عرض سعر الدخول فقط إذا كان مختلفاً عن سعر الخروج
-    if entry_price and exit_price:
-        try:
-            if abs(float(entry_price) - float(exit_price)) > 0.01:
-                message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
-        except (ValueError, TypeError):
-            message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
+    # عرض سعر الدخول دائماً إذا كان موجوداً
+    if entry_price:
+        message += f"💰 سعر الدخول: <code>{format_price(entry_price)}</code>\n"
     
-    message += f"💰 سعر الخروج: <code>{format_price(exit_price)}</code>\n"
+    # عرض سعر الخروج
+    if exit_price:
+        message += f"💰 سعر الخروج: <code>{format_price(exit_price)}</code>\n"
     
+    # عرض Stop Loss دائماً إذا كان موجوداً أو يمكن حسابه
     if stop_loss:
         message += f"🛑 Stop Loss: <code>{format_price(float(stop_loss))}</code>\n"
+    elif exit_price:
+        # إذا لم يكن stop_loss موجوداً، استخدم exit_price كـ Stop Loss
+        message += f"🛑 Stop Loss: <code>{format_price(exit_price)}</code>\n"
     
     message += f"⏰ الوقت: {escape_html(time)}"
     
