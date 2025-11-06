@@ -29,3 +29,6 @@ logs/
 # Railway
 .railway/
 
+# Trades storage (اختياري - احذف هذا السطر إذا أردت حفظ الصفقات في Git)
+# trades.json
+

@@ -115,19 +115,19 @@ Message (JSON):
 ═══════════════════════════════════════════════════════════════════════════
 
 ✅ Alert Type: Webhook URL
-✅ Webhook URL: https://go-production-e51a.up.railway.app/personal/-1003252117175/webhook
+✅ Webhook URL: https://go-production-e51a.up.railway.app/personal/-1003214062626/webhook
 ✅ Frequency: Once Per Bar Close
 ✅ Expiration: Never
 
-⚠️ ملاحظة: Chat ID للمجموعة: -1003252117175
+⚠️ ملاحظة: Chat ID للمجموعة: -1003214062626 (Crypto Insight)
 
 ⚠️ ⚠️ ⚠️ مهم جداً:
 ────────────────────────────────────────────────────────────────────────────
 ✅ تأكد من استخدام نفس Webhook URL في جميع التنبيهات:
-   https://go-production-e51a.up.railway.app/personal/-1003252117175/webhook
+   https://go-production-e51a.up.railway.app/personal/-1003214062626/webhook
 
-✅ إذا استخدمت URL بدون chat_id (مثل /webhook فقط)، سيتم استخدام Chat ID من config.py
-   (الآن config.py يحتوي على Chat ID للمجموعة كافتراضي)
+✅ إذا استخدمت URL بدون chat_id (مثل /webhook فقط)، سيتم استخدام Chat ID من app.py
+   (الآن app.py يحتوي على Chat ID للمجموعة الجديدة كافتراضي)
 
 ═══════════════════════════════════════════════════════════════════════════
 📝 ملاحظات مهمة:
