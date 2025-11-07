@@ -255,23 +255,6 @@ def webhook(chat_id=None):
         
         logger.info(f"✅ New signal: {signal} for {data.get('symbol', 'N/A')}")
         
-        # Get target chat_id
-        # أولوية: 1) من URL (chat_id parameter), 2) من config.py
-        target_chat_id = chat_id
-        if not target_chat_id:
-            from config import TELEGRAM_CHAT_ID
-            target_chat_id = TELEGRAM_CHAT_ID
-        
-        if not target_chat_id:
-            logger.error("❌ No chat_id available - يجب تحديد Chat ID في URL أو config.py")
-            return jsonify({
-                "error": "No chat_id available",
-                "message": "يجب تحديد Chat ID في URL: /personal/<chat_id>/webhook أو في config.py",
-                "help": "راجع ملف كيفية_الحصول_على_Chat_ID_للمجموعة.md"
-            }), 500
-        
-        logger.info(f"📤 Target Chat ID: {target_chat_id}")
-        
         # Route to appropriate formatter
         message = None
         
@@ -298,16 +281,25 @@ def webhook(chat_id=None):
         if message:
             # إذا كان chat_id محدد في URL، أرسل له فقط
             # وإلا أرسل لجميع المجموعات من config.py
-            if target_chat_id:
+            if chat_id:
                 # إرسال لمجموعة واحدة (من URL)
-                success = send_message(message, target_chat_id)
+                logger.info(f"📤 إرسال لمجموعة واحدة من URL: {chat_id}")
+                success = send_message(message, chat_id)
                 if success:
-                    return jsonify({"status": "success", "signal": signal, "chat_id": target_chat_id}), 200
+                    return jsonify({"status": "success", "signal": signal, "chat_id": chat_id}), 200
                 else:
                     return jsonify({"status": "error", "message": "Failed to send to Telegram"}), 500
             else:
                 # إرسال لجميع المجموعات من config.py
                 from config import TELEGRAM_CHAT_IDS
+                if not TELEGRAM_CHAT_IDS:
+                    logger.error("❌ No chat IDs available - يجب تحديد Chat IDs في config.py")
+                    return jsonify({
+                        "error": "No chat IDs available",
+                        "message": "يجب تحديد Chat IDs في config.py أو استخدام /personal/<chat_id>/webhook"
+                    }), 500
+                
+                logger.info(f"📤 إرسال لجميع المجموعات ({len(TELEGRAM_CHAT_IDS)} مجموعة)")
                 result = send_message_to_all_groups(message, TELEGRAM_CHAT_IDS)
                 if result['success'] > 0:
                     return jsonify({

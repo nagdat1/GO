@@ -417,11 +417,6 @@ def webhook(chat_id=None):
             exit_price = data.get('exit_price') or data.get('price', 0)
             update_trade_status(data.get('symbol', ''), signal, exit_price)
         
-        # تحديد chat_id
-        target_chat = chat_id or CHAT_ID
-        if not target_chat:
-            return jsonify({"error": "Chat ID required"}), 500
-        
         # تنسيق الرسالة
         msg = None
         if signal in ['BUY', 'LONG']:
@@ -452,13 +447,22 @@ def webhook(chat_id=None):
             # وإلا أرسل لجميع المجموعات من config.py
             if chat_id:
                 # إرسال لمجموعة واحدة (من URL)
-                if send_telegram(msg, target_chat):
-                    return jsonify({"status": "success", "signal": signal, "chat_id": target_chat}), 200
+                logger.info(f"📤 إرسال لمجموعة واحدة من URL: {chat_id}")
+                if send_telegram(msg, chat_id):
+                    return jsonify({"status": "success", "signal": signal, "chat_id": chat_id}), 200
                 else:
                     return jsonify({"status": "error"}), 500
             else:
                 # إرسال لجميع المجموعات من config.py
                 from config import TELEGRAM_CHAT_IDS
+                if not TELEGRAM_CHAT_IDS:
+                    logger.error("❌ No chat IDs available - يجب تحديد Chat IDs في config.py")
+                    return jsonify({
+                        "error": "No chat IDs available",
+                        "message": "يجب تحديد Chat IDs في config.py أو استخدام /personal/<chat_id>/webhook"
+                    }), 500
+                
+                logger.info(f"📤 إرسال لجميع المجموعات ({len(TELEGRAM_CHAT_IDS)} مجموعة)")
                 success_count = 0
                 for group_chat_id in TELEGRAM_CHAT_IDS:
                     if send_telegram(msg, group_chat_id):
