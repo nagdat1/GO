@@ -596,10 +596,78 @@ def format_stop_loss_hit(data: dict) -> str:
     
     return message
 
+def send_message_to_all_groups(message: str, chat_ids: list = None) -> dict:
+    """
+    إرسال رسالة لجميع المجموعات المحددة
+    
+    Args:
+        message: الرسالة المراد إرسالها
+        chat_ids: قائمة Chat IDs (إذا لم تُحدد، سيتم استخدام القائمة من config.py)
+    
+    Returns:
+        dict: نتائج الإرسال لكل مجموعة
+        {
+            'total': 3,
+            'success': 2,
+            'failed': 1,
+            'results': {
+                '-1003214062626': True,
+                '-1001234567890': True,
+                '-1009876543210': False
+            }
+        }
+    """
+    from config import TELEGRAM_CHAT_IDS
+    
+    # استخدام القائمة المحددة أو القائمة من config
+    target_chat_ids = chat_ids if chat_ids else TELEGRAM_CHAT_IDS
+    
+    if not target_chat_ids:
+        logger.error("❌ No chat IDs available - يجب تحديد Chat IDs في config.py")
+        return {
+            'total': 0,
+            'success': 0,
+            'failed': 0,
+            'results': {}
+        }
+    
+    results = {}
+    success_count = 0
+    failed_count = 0
+    
+    logger.info(f"📤 إرسال الرسالة إلى {len(target_chat_ids)} مجموعة/مجموعات")
+    
+    for chat_id in target_chat_ids:
+        chat_id_str = str(chat_id).strip()
+        if not chat_id_str:
+            continue
+            
+        logger.info(f"📤 محاولة الإرسال إلى المجموعة: {chat_id_str}")
+        success = send_message(message, chat_id_str)
+        results[chat_id_str] = success
+        
+        if success:
+            success_count += 1
+            logger.info(f"✅ تم الإرسال بنجاح إلى {chat_id_str}")
+        else:
+            failed_count += 1
+            logger.warning(f"⚠️ فشل الإرسال إلى {chat_id_str}")
+    
+    logger.info(f"📊 ملخص الإرسال: نجح {success_count}/{len(target_chat_ids)}, فشل {failed_count}/{len(target_chat_ids)}")
+    
+    return {
+        'total': len(target_chat_ids),
+        'success': success_count,
+        'failed': failed_count,
+        'results': results
+    }
+
 def send_startup_message() -> bool:
-    """إرسال رسالة بدء التشغيل"""
+    """إرسال رسالة بدء التشغيل لجميع المجموعات"""
     try:
         from datetime import datetime
+        from config import TELEGRAM_CHAT_IDS
+        
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         message = f"🤖 <b>تم تشغيل البوت بنجاح!</b>\n\n"
@@ -613,9 +681,12 @@ def send_startup_message() -> bool:
         message += f"• ضرب الهدف الأول (TP1)\n"
         message += f"• ضرب الهدف الثاني (TP2)\n"
         message += f"• ضرب الهدف الثالث (TP3)\n"
-        message += f"• ضرب وقف الخسارة (STOP_LOSS)"
+        message += f"• ضرب وقف الخسارة (STOP_LOSS)\n\n"
+        message += f"📢 البوت يرسل إلى {len(TELEGRAM_CHAT_IDS)} مجموعة/مجموعات"
         
-        return send_message(message)
+        # إرسال لجميع المجموعات
+        result = send_message_to_all_groups(message)
+        return result['success'] > 0
     except Exception as e:
         logger.error(f"Error sending startup message: {e}")
         return False

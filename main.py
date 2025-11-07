@@ -4,6 +4,7 @@ TradingView Webhook to Telegram Bot - نسخة مبسطة
 from flask import Flask, request, jsonify
 from telegram_bot import (
     send_message,
+    send_message_to_all_groups,
     format_buy_signal,
     format_sell_signal,
     format_buy_reverse_signal,
@@ -295,11 +296,29 @@ def webhook(chat_id=None):
         
         # Send message
         if message:
-            success = send_message(message, target_chat_id)
-            if success:
-                return jsonify({"status": "success", "signal": signal}), 200
+            # إذا كان chat_id محدد في URL، أرسل له فقط
+            # وإلا أرسل لجميع المجموعات من config.py
+            if target_chat_id:
+                # إرسال لمجموعة واحدة (من URL)
+                success = send_message(message, target_chat_id)
+                if success:
+                    return jsonify({"status": "success", "signal": signal, "chat_id": target_chat_id}), 200
+                else:
+                    return jsonify({"status": "error", "message": "Failed to send to Telegram"}), 500
             else:
-                return jsonify({"status": "error", "message": "Failed to send to Telegram"}), 500
+                # إرسال لجميع المجموعات من config.py
+                from config import TELEGRAM_CHAT_IDS
+                result = send_message_to_all_groups(message, TELEGRAM_CHAT_IDS)
+                if result['success'] > 0:
+                    return jsonify({
+                        "status": "success",
+                        "signal": signal,
+                        "sent_to": result['success'],
+                        "total": result['total'],
+                        "results": result['results']
+                    }), 200
+                else:
+                    return jsonify({"status": "error", "message": "Failed to send to all groups"}), 500
         else:
             return jsonify({"status": "error", "message": "Failed to format message"}), 500
             

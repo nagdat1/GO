@@ -447,8 +447,32 @@ def webhook(chat_id=None):
             return jsonify({"error": f"Unknown signal: {signal}"}), 400
         
         # إرسال
-        if msg and send_telegram(msg, target_chat):
-            return jsonify({"status": "success", "signal": signal}), 200
+        if msg:
+            # إذا كان chat_id محدد في URL، أرسل له فقط
+            # وإلا أرسل لجميع المجموعات من config.py
+            if chat_id:
+                # إرسال لمجموعة واحدة (من URL)
+                if send_telegram(msg, target_chat):
+                    return jsonify({"status": "success", "signal": signal, "chat_id": target_chat}), 200
+                else:
+                    return jsonify({"status": "error"}), 500
+            else:
+                # إرسال لجميع المجموعات من config.py
+                from config import TELEGRAM_CHAT_IDS
+                success_count = 0
+                for group_chat_id in TELEGRAM_CHAT_IDS:
+                    if send_telegram(msg, group_chat_id):
+                        success_count += 1
+                
+                if success_count > 0:
+                    return jsonify({
+                        "status": "success",
+                        "signal": signal,
+                        "sent_to": success_count,
+                        "total": len(TELEGRAM_CHAT_IDS)
+                    }), 200
+                else:
+                    return jsonify({"status": "error"}), 500
         else:
             return jsonify({"status": "error"}), 500
             
