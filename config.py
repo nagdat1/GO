@@ -59,7 +59,7 @@ def validate_config():
     if errors:
         raise ValueError(f"Configuration errors: {', '.join(errors)}")
     
-    return True
+    return Tru
 
 
 def get_config_status():
